@@ -602,7 +602,7 @@ td { color: var(--muted); }
 
 @media (max-width: 900px) {
   .shell, .nav, .hero-content {
-    width: calc(100% - 28px);
+    width: calc(100vw - 28px);
     max-width: 1180px;
   }
 
@@ -660,7 +660,7 @@ td { color: var(--muted); }
 
 @media (max-width: 620px) {
   .shell, .nav, .hero-content {
-    width: calc(100% - 22px);
+    width: calc(100vw - 22px);
     max-width: 1180px;
   }
   .hero-content { padding: 76px 0 44px; }
@@ -668,6 +668,19 @@ td { color: var(--muted); }
   h1 { font-size: 2.32rem; }
   .page-hero h1 { font-size: 2.55rem; }
   .section-head h2 { font-size: 2rem; }
+  .page-hero h1,
+  .page-hero p,
+  .section-head h2,
+  .section-head p,
+  .case-snapshot h3,
+  .case-snapshot p,
+  .case-snapshot li,
+  .panel h3,
+  .panel p,
+  figcaption {
+    max-width: 340px;
+    overflow-wrap: anywhere;
+  }
   .hero-proof, .role-strip, .grid-4 { grid-template-columns: 1fr; }
   .role-strip div { border-left: 0; border-top: 1px solid var(--line); }
   .role-strip div:first-child { border-top: 0; }

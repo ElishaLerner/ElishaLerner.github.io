@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Simulink Motion Control | Elisha Lerner</title>
+  <title>Controls, Simulink, and Robotics ML | Elisha Lerner</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
   <section class="page-hero">
     <div class="shell">
-      <p class="eyebrow">Simulink and motion control</p>
-      <h1>Simulink models used for motion-control design, tuning, and verification.</h1>
-      <p>The Simulink/MATLAB work shows controller design as a practical engineering workflow: a standalone actuator-control model and the hand workflow where Simulink commands a MuJoCo plant through a Python TCP bridge.</p>
+      <p class="eyebrow">Controls, Simulink, and robotics ML</p>
+      <h1>Controls, simulation, and learned motion prediction.</h1>
+      <p>The Simulink/MATLAB work shows controller design as a practical engineering workflow: a standalone actuator-control model, the hand workflow where Simulink commands a MuJoCo plant through a Python TCP bridge, and selected graduate coursework in reinforcement learning, robot dynamics, and learned prediction for variable-stiffness robots.</p>
     </div>
   </section>
   <main class="shell">
@@ -20,12 +20,13 @@
       <div class="case-snapshot">
         <div>
           <p class="snapshot-label">What this page covers</p>
-          <h3>Simulink is one of the main engineering tools behind the hand work.</h3>
-          <p>The models here are not just screenshots. The portfolio includes the SLX Simulink model, MATLAB parameter file, and live-script figure generator for the standalone actuator-control project.</p>
+          <h3>Simulink and model-based workflows are main engineering tools behind the hand work.</h3>
+          <p>The models here are not just screenshots. The portfolio includes the SLX Simulink model, MATLAB parameter file, and live-script figure generator for the standalone actuator-control project, plus selected coursework artifacts that show breadth in robot learning and dynamics.</p>
         </div>
         <ul>
           <li><strong>Space actuator:</strong> a Simulink model of motor electrical dynamics, torque generation, plant motion, disturbance torque, and PID control.</li>
           <li><strong>Robotic hand:</strong> a Simulink tuning surface that sends target angle, PID gains, and torque/current limits to a Python MuJoCo plant server.</li>
+          <li><strong>Robot-learning coursework:</strong> adaptive-origami position prediction, a Simulink RL water-tank environment, and MATLAB robot dynamics functions.</li>
           <li><strong>Portfolio output:</strong> architecture diagrams, plant diagrams, response plots, and the hand Simulink/MuJoCo workflow used for controller tuning.</li>
         </ul>
       </div>
@@ -76,6 +77,37 @@
         <figure class="wide-media"><img src="assets/hand/torque-limit-sweep.png" alt="Torque limit sweep"><figcaption>Torque/current-limit sweep used to separate low-effort free-space motion from current-limited contact authority.</figcaption></figure>
       </div>
       <p class="source-note"><a class="button primary" href="hand.html">Open robotic hand page</a> <a class="button" href="software.html">Open controller code page</a></p>
+    </section>
+
+    <section class="section" id="coursework-controls">
+      <div class="section-head">
+        <p class="eyebrow">Supplemental coursework evidence</p>
+        <h2>Applied ML, reinforcement learning, and robot dynamics work that supports the controls story.</h2>
+        <p>These artifacts are selected from previous graduate coursework because they connect directly to robotics R&amp;D: collecting physical robot data, building learned predictors, setting up RL environments, and deriving dynamics for multi-link mechanisms.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel">
+          <h3>Learned position prediction</h3>
+          <p>Adaptive-origami ML project using motion-capture data, heater voltage inputs, encoder-controlled cable actuation, and compact TensorFlow Lite regressors to predict the final 3D position of a variable-stiffness module.</p>
+          <p><a class="button" href="assets/coursework/source/ml-position-data.csv">Open data sample</a> <a class="button" href="assets/coursework/source/motion-capture-csv-reader.m">Open MATLAB reader</a></p>
+        </div>
+        <div class="panel">
+          <h3>Simulink RL environment</h3>
+          <p>Water-tank reinforcement-learning model with randomized target and initial height, observation generation, reward calculation, action input, stop conditions, and a plant subsystem suitable for training experiments.</p>
+          <p><a class="button" href="assets/coursework/source/rlwatertank.slx">Open RL model</a> <a class="button" href="assets/coursework/source/localResetFcn.m">Open reset function</a></p>
+        </div>
+        <div class="panel">
+          <h3>Robot dynamics and kinematics</h3>
+          <p>MATLAB robotics coursework implementing PUMA dynamics terms, gravity, Jacobian and Jacobian derivative calculations, plus two-link forward-kinematics animation for mechanism motion studies.</p>
+          <p><a class="button" href="assets/coursework/source/Puma_coeff.m">Open PUMA dynamics</a> <a class="button" href="assets/coursework/source/two_link_anim.m">Open animation source</a></p>
+        </div>
+      </div>
+      <div class="grid-2 source-note">
+        <figure class="media-contain"><img src="assets/coursework/ml-motion-capture-setup.png" alt="Motion-capture setup for adaptive origami ML project"><figcaption>Physical data collection setup for the learned variable-stiffness origami predictor.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/coursework/ml-training-mae.png" alt="Training mean absolute error plots for X Y and Z coordinate models"><figcaption>Coordinate-wise neural-network training curves from the adaptive-origami position prediction project.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/coursework/rl-water-tank-model.png" alt="Simulink reinforcement-learning water tank model"><figcaption>Simulink RL water-tank environment with observations, reward logic, action input, and plant model.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/coursework/two-link-animation.gif" alt="Two-link robot animation from MATLAB dynamics coursework"><figcaption>MATLAB-generated two-link mechanism animation used to verify forward-kinematics behavior.</figcaption></figure>
+      </div>
     </section>
   </main>
   <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
