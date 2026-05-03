@@ -1,0 +1,743 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SMP VSJ Arduino Mega Controller | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Source Code</p><h1>SMP VSJ Arduino Mega Controller</h1><p>Arduino Mega firmware for coordinating VSJ heating, relay isolation, thermistor feedback, encoder motors, and locomotion states in the composite SMP robot.</p><div class="actions"><a class="button primary" href="assets/code/smp-vsj-arduino-mega-controller.ino">Open raw file</a><a class="button" href="software.html">Back to software</a></div></div></section>
+  <main class="shell">
+    <section class="section">
+      <pre class="code-view"><code class="language-cpp">#include &lt;PID_v1.h&gt;
+#include &lt;Encoder.h&gt;
+
+double cycle = 5;
+
+String command;
+String loco;
+
+const int heatpwm1_1 = 2;
+const int heatpwm1_2 = 3;
+const int heatpwm1_3 = 4;
+const int heatpwm1_4 = 5;
+const int heatpwm2_1 = 6;
+const int heatpwm2_2 = 7;
+const int heatpwm2_3 = 8;
+const int heatpwm2_4 = 9;
+const int T1_1 = A1;
+const int T1_2 = A2;
+const int T1_3 = A3;
+const int T2_1 = A4;
+const int T2_2 = A5;
+const int T2_3 = A6;
+
+const int tpower1 = 22;
+const int tpower2 = 23;
+
+//Thermistor constants
+const int B_val = 3950;
+const int ResT = 100000;
+const int nom_temp = 25;
+const int samp = 5;
+
+int i = 0;
+double res1_1 = 0;
+double res1_2 = 0;
+double res1_3 = 0;
+double res2_1 = 0;
+double res2_2 = 0;
+double res2_3 = 0;
+double stage = 0;
+
+
+double averageRes1_1 = 0;
+double averageRes1_2 = 0;
+double averageRes1_3 = 0;
+double averageRes2_1 = 0;
+double averageRes2_2 = 0;
+double averageRes2_3 = 0;
+
+double temp1_1 = 0;
+double temp1_2 = 0;
+double temp1_3 = 0;
+double temp2_1 = 0;
+double temp2_2 = 0;
+double temp2_3 = 0;
+
+//Motor constants
+Encoder em1(20, 21);
+Encoder em2(18, 19);
+
+const int M1En = 12;
+const int M1Ph = 46;
+const int M2En = 11;
+const int M2Ph = 47;
+
+double g = 0;
+double s1_1 = 0;
+double s1_2 = 0;
+double s1_3 = 0;
+double s1_4 = 0;
+double s2_1 = 0;
+double s2_2 = 0;
+double s2_3 = 0;
+double s2_4 = 0;
+double motion_done = 0;
+
+double dist1und = 1.5 * 6 * 380 * .6;
+double dist2und = 1.5 * 6 * 380 * .6;
+double dist1in = 2 * 6 * 380;
+double dist2in = 2.4 * 6 * 380;
+double dist1turt = 1.5 * 6 * 380;
+double dist2turt = 1.2 * 6 * 380;
+double dist1 = 1.5 * 6 * 380; //a full rotation is roughly 21.7 mm discplacement
+double dist2 = 1.5 * 6 * 380;
+// inch dist1= 2*6*380          dist2=2.4*6*380
+double z = 0;
+
+//Relays
+const int R1_1 = 28;
+const int R1_2 = 29; //element 2 top--&gt;bot
+const int R1_3 = 30; //element 3 bot--&gt;top
+const int R1_4 = 31;
+const int R2_1 = 32;
+const int R2_2 = 33; //element 2 top--&gt;bot
+const int R2_3 = 34; //element 3 bot--&gt;top
+const int R2_4 = 35;
+
+//PID Variables
+double Setpoint1_1, Setpoint1_2, Setpoint1_3, Setpoint1_4, PIDpwm1_1, PIDpwm1_2, PIDpwm1_3, PIDpwm1_4;
+double Setpoint2_1, Setpoint2_2, Setpoint2_3, Setpoint2_4, PIDpwm2_1, PIDpwm2_2, PIDpwm2_3, PIDpwm2_4;
+double Kp = 40, Ki = 40, Kd = 80;
+PID temp1_1cont(&amp;temp1_1, &amp;PIDpwm1_1, &amp;Setpoint1_1, Kp, Ki, Kd, DIRECT);
+PID temp1_2cont(&amp;temp1_2, &amp;PIDpwm1_2, &amp;Setpoint1_2, Kp, Ki, Kd, DIRECT);
+PID temp1_3cont(&amp;temp1_2, &amp;PIDpwm1_3, &amp;Setpoint1_3, Kp, Ki, Kd, DIRECT);
+PID temp1_4cont(&amp;temp1_3, &amp;PIDpwm1_4, &amp;Setpoint1_4, Kp, Ki, Kd, DIRECT);
+PID temp2_1cont(&amp;temp2_1, &amp;PIDpwm2_1, &amp;Setpoint2_1, Kp, Ki, Kd, DIRECT);
+PID temp2_2cont(&amp;temp2_2, &amp;PIDpwm2_2, &amp;Setpoint2_2, Kp, Ki, Kd, DIRECT);
+PID temp2_3cont(&amp;temp2_2, &amp;PIDpwm2_3, &amp;Setpoint2_3, Kp, Ki, Kd, DIRECT);
+PID temp2_4cont(&amp;temp2_3, &amp;PIDpwm2_4, &amp;Setpoint2_4, Kp, Ki, Kd, DIRECT);
+
+
+
+void setup() {
+
+  Serial.begin(9600);
+
+  pinMode(R1_1, OUTPUT);
+  pinMode(R1_2, OUTPUT);
+  pinMode(R1_3, OUTPUT);
+  pinMode(R1_4, OUTPUT);
+  pinMode(R2_1, OUTPUT);
+  pinMode(R2_2, OUTPUT);
+  pinMode(R2_3, OUTPUT);
+  pinMode(R2_4, OUTPUT);
+
+  pinMode(M1En, OUTPUT);
+  pinMode(M1Ph, OUTPUT);
+  pinMode(M2En, OUTPUT);
+  pinMode(M2Ph, OUTPUT);
+
+  pinMode(T1_1, INPUT);
+  pinMode(T1_2, INPUT);
+  pinMode(T1_3, INPUT);
+  pinMode(T2_1, INPUT);
+  pinMode(T2_2, INPUT);
+  pinMode(T2_3, INPUT);
+  pinMode(heatpwm1_1, OUTPUT);
+  pinMode(heatpwm1_2, OUTPUT);
+  pinMode(heatpwm1_3, OUTPUT);
+  pinMode(heatpwm1_4, OUTPUT);
+  pinMode(heatpwm2_1, OUTPUT);
+  pinMode(heatpwm2_2, OUTPUT);
+  pinMode(heatpwm2_3, OUTPUT);
+  pinMode(heatpwm2_4, OUTPUT);
+  pinMode(tpower1, OUTPUT);
+  pinMode(tpower2, OUTPUT);
+
+  temp1_1cont.SetMode(AUTOMATIC);
+  temp1_2cont.SetMode(AUTOMATIC);
+  temp1_3cont.SetMode(AUTOMATIC);
+  temp1_4cont.SetMode(AUTOMATIC);
+  temp2_1cont.SetMode(AUTOMATIC);
+  temp2_2cont.SetMode(AUTOMATIC);
+  temp2_3cont.SetMode(AUTOMATIC);
+  temp2_4cont.SetMode(AUTOMATIC);
+
+  digitalWrite(R1_1, 1); //0 is on
+  digitalWrite(R1_2, 1);
+  digitalWrite(R1_3, 1); //0 is on
+  digitalWrite(R1_4, 1);
+  digitalWrite(R2_1, 1); //0 is on
+  digitalWrite(R2_2, 1);
+  digitalWrite(R2_3, 1); //0 is on
+  digitalWrite(R2_4, 1);
+  command = &quot;reset&quot;;
+
+}
+
+void loop() {
+  if (Serial.available()) {
+    command = Serial.readStringUntil(&#39;\n&#39;);
+
+
+  }
+
+  if (command.equals(&quot;reset&quot;)) {
+    Setpoint1_1 = 0;
+    Setpoint1_2 = 0;
+    Setpoint1_3 = 0;
+    Setpoint1_4 = 0;
+    Setpoint2_1 = 0;
+    Setpoint2_2 = 0;
+    Setpoint2_3 = 0;
+    Setpoint2_4 = 0;
+    digitalWrite(R1_1, 1); //0 is on
+    digitalWrite(R1_2, 1);
+    digitalWrite(R1_3, 1); //0 is on
+    digitalWrite(R1_4, 1);
+    digitalWrite(R2_1, 1); //0 is on
+    digitalWrite(R2_2, 1);
+    digitalWrite(R2_3, 1); //0 is on
+    digitalWrite(R2_4, 1);
+    g = 0;
+    z = 0;
+    loco = &quot;reset&quot;;
+  }
+
+  if (command.equals(&quot;inch&quot;)) {
+    Setpoint1_1 = 0;
+    Setpoint1_2 = 90;
+    Setpoint1_3 = 0;
+    Setpoint1_4 = 60;
+    Setpoint2_1 = 0;
+    Setpoint2_2 = 0;
+    Setpoint2_3 = 0;
+    Setpoint2_4 = 90;
+    loco = &quot;inch&quot;;
+    Serial.print(&quot;inch&quot;);
+  }
+
+  if (command.equals(&quot;undulate&quot;)) {
+    Setpoint1_1 = 70;
+    Setpoint1_2 = 0;
+    Setpoint1_3 = 0;
+    Setpoint1_4 = 0;
+    Setpoint2_1 = 70;
+    Setpoint2_2 = 0;
+    Setpoint2_3 = 0;
+    Setpoint2_4 = 0;
+    loco = &quot;und&quot;;
+  }
+
+  if (command.equals(&quot;turtle&quot;)) {
+    Setpoint1_1 = 0;
+    Setpoint1_2 = 80;
+    Setpoint1_3 = 0;
+    Setpoint1_4 = 0;
+    Setpoint2_1 = 0;
+    Setpoint2_2 = 80;
+    Setpoint2_3 = 0;
+    Setpoint2_4 = 0;
+    digitalWrite(R1_2, 0);
+    digitalWrite(R2_2, 0);
+    loco = &quot;turt&quot;;
+  }
+
+
+  if (Setpoint1_1 &lt;= 0) {
+    digitalWrite(R1_1, 1);
+  } else {
+    digitalWrite(R1_1, 0);
+  }
+  if (Setpoint1_2 &lt;= 0) {
+    digitalWrite(R1_2, 1);
+  } else {
+    digitalWrite(R1_2, 0);
+  }
+  if (Setpoint1_3 &lt;= 0) {
+    digitalWrite(R1_3, 1);
+  } else {
+    digitalWrite(R1_3, 0);
+  }
+  if (Setpoint1_4 &lt;= 0) {
+    digitalWrite(R1_4, 1);
+  } else {
+    digitalWrite(R1_4, 0);
+  }
+  if (Setpoint2_1 &lt;= 0) {
+    digitalWrite(R2_1, 1);
+  } else {
+    digitalWrite(R2_1, 0);
+  }
+  if (Setpoint2_2 &lt;= 0) {
+    digitalWrite(R2_2, 1);
+  } else {
+    digitalWrite(R2_2, 0);
+  }
+  if (Setpoint2_3 &lt;= 0) {
+    digitalWrite(R2_3, 1);
+  } else {
+    digitalWrite(R2_3, 0);
+  }
+  if (Setpoint2_4 &lt;= 0) {
+    digitalWrite(R2_4, 1);
+  } else {
+    digitalWrite(R2_4, 0);
+  }
+
+
+
+  while ((Setpoint1_2 &gt; 0) &amp;&amp; (Setpoint1_3 &gt; 0)) {
+    digitalWrite(R1_2, 1);
+    digitalWrite(R1_3, 1);
+    Serial.println(&quot;Error Both Diagonals Active on module 1&quot;);
+  }
+
+  while ((Setpoint2_2 &gt; 0) &amp;&amp; (Setpoint2_3 &gt; 0)) {
+    digitalWrite(R2_2, 1);
+    digitalWrite(R2_3, 1);
+    Serial.println(&quot;Error Both Diagonals Active on module 2&quot;);
+  }
+
+  while (i &lt; samp) {
+    digitalWrite(tpower1, HIGH);
+    digitalWrite(tpower2, HIGH);
+    res1_1 += analogRead(T1_1);
+    res1_2 += analogRead(T1_2);
+    res1_3 += analogRead(T1_3);
+    res2_1 += analogRead(T2_1);
+    res2_2 += analogRead(T2_2);
+    res2_3 += analogRead(T2_3);
+    i = i + 1;
+  }
+
+  digitalWrite(tpower1, 0);
+  digitalWrite(tpower2, 0);
+
+  averageRes1_1 = res1_1 / samp;
+  averageRes1_1 = 1023 / averageRes1_1 - 1;
+  averageRes1_1 = ResT / averageRes1_1;
+
+  temp1_1 = averageRes1_1 / ResT;
+  temp1_1 = log(temp1_1);
+  temp1_1 = temp1_1 / B_val;
+  temp1_1 = temp1_1 + 1 / (nom_temp + 273.15);
+  temp1_1 = 1 / temp1_1;
+  temp1_1 = temp1_1 - 273.15;
+  Serial.print(&quot;Temp 1_1 = &quot;);
+  Serial.print(temp1_1);
+  Serial.print(&quot; *C&quot;);
+
+  averageRes1_2 = res1_2 / samp;
+  averageRes1_2 = 1023 / averageRes1_2 - 1;
+  averageRes1_2 = ResT / averageRes1_2;
+
+  temp1_2 = averageRes1_2 / ResT;
+  temp1_2 = log(temp1_2);
+  temp1_2 = temp1_2 / B_val;
+  temp1_2 = temp1_2 + 1 / (nom_temp + 273.15);
+  temp1_2 = 1 / temp1_2;
+  temp1_2 = temp1_2 - 273.15;
+  Serial.print(&quot;    Temp 1_2 = &quot;);
+  Serial.print(temp1_2);
+  Serial.print(&quot; *C&quot;);
+
+
+  averageRes1_3 = res1_3 / samp;
+  averageRes1_3 = 1023 / averageRes1_3 - 1;
+  averageRes1_3 = ResT / averageRes1_3;
+
+  temp1_3 = averageRes1_3 / ResT;
+  temp1_3 = log(temp1_3);
+  temp1_3 = temp1_3 / B_val;
+  temp1_3 = temp1_3 + 1 / (nom_temp + 273.15);
+  temp1_3 = 1 / temp1_3;
+  temp1_3 = temp1_3 - 273.15;
+  Serial.print(&quot;    Temp 1_3 = &quot;);
+  Serial.print(temp1_3);
+  Serial.print(&quot; *C&quot;);
+  Serial.println();
+
+  averageRes2_1 = res2_1 / samp;
+  averageRes2_1 = 1023 / averageRes2_1 - 1;
+  averageRes2_1 = ResT / averageRes2_1;
+
+  temp2_1 = averageRes2_1 / ResT;
+  temp2_1 = log(temp2_1);
+  temp2_1 = temp2_1 / B_val;
+  temp2_1 = temp2_1 + 1 / (nom_temp + 273.15);
+  temp2_1 = 1 / temp2_1;
+  temp2_1 = temp2_1 - 273.15;
+  Serial.print(&quot;Temp 2_1 = &quot;);
+  Serial.print(temp2_1);
+  Serial.print(&quot; *C&quot;);
+
+  averageRes2_2 = res2_2 / samp;
+  averageRes2_2 = 1023 / averageRes2_2 - 1;
+  averageRes2_2 = ResT / averageRes2_2;
+
+  temp2_2 = averageRes2_2 / ResT;
+  temp2_2 = log(temp2_2);
+  temp2_2 = temp2_2 / B_val;
+  temp2_2 = temp2_2 + 1 / (nom_temp + 273.15);
+  temp2_2 = 1 / temp2_2;
+  temp2_2 = temp2_2 - 273.15;
+  Serial.print(&quot;    Temp 2_2 = &quot;);
+  Serial.print(temp2_2);
+  Serial.print(&quot; *C&quot;);
+
+
+  averageRes2_3 = res2_3 / samp;
+  averageRes2_3 = 1023 / averageRes2_3 - 1;
+  averageRes2_3 = ResT / averageRes2_3;
+
+  temp2_3 = averageRes2_3 / ResT;
+  temp2_3 = log(temp2_3);
+  temp2_3 = temp2_3 / B_val;
+  temp2_3 = temp2_3 + 1 / (nom_temp + 273.15);
+  temp2_3 = 1 / temp2_3;
+  temp2_3 = temp2_3 - 273.15;
+  Serial.print(&quot;    Temp 2_3 = &quot;);
+  Serial.print(temp2_3);
+  Serial.print(&quot; *C&quot;);
+  Serial.println();
+  temp1_1cont.Compute();
+  temp1_2cont.Compute();
+  temp1_3cont.Compute();
+  temp1_4cont.Compute();
+  temp2_1cont.Compute();
+  temp2_2cont.Compute();
+  temp2_3cont.Compute();
+  temp2_4cont.Compute();
+
+  analogWrite(heatpwm1_1, PIDpwm1_1);
+  analogWrite(heatpwm1_2, PIDpwm1_2);
+  analogWrite(heatpwm1_3, PIDpwm1_3);
+  analogWrite(heatpwm1_4, PIDpwm1_4);
+  analogWrite(heatpwm2_1, PIDpwm2_1);
+  analogWrite(heatpwm2_2, PIDpwm2_2);
+  analogWrite(heatpwm2_3, PIDpwm2_3);
+  analogWrite(heatpwm2_4, PIDpwm2_4);
+
+
+  if (((temp1_1 &gt;= Setpoint1_1 - 2) &amp;&amp; (temp1_1 &lt;= Setpoint1_1 + 2)) || (Setpoint1_1 == 0)) {
+    s1_1 = 1;
+  } else {
+    s1_1 = 0;
+  }
+  if (((temp1_2 &gt;= Setpoint1_2 - 2) &amp;&amp; (temp1_2 &lt;= Setpoint1_2 + 2)) || (Setpoint1_2 == 0)) {
+    s1_2 = 1;
+  } else {
+    s1_2 = 0;
+  }
+  if (((temp1_2 &gt;= Setpoint1_3 - 2) &amp;&amp; (temp1_2 &lt;= Setpoint1_3 + 2)) || (Setpoint1_3 == 0)) {
+    s1_3 = 1;
+  } else {
+    s1_3 = 0;
+  }
+  if (((temp1_3 &gt;= Setpoint1_4 - 2) &amp;&amp; (temp1_3 &lt;= Setpoint1_4 + 2)) || (Setpoint1_4 == 0)) {
+    s1_4 = 1;
+  } else {
+    s1_4 = 0;
+  }
+  if (((temp2_1 &gt;= Setpoint2_1 - 2) &amp;&amp; (temp2_1 &lt;= Setpoint2_1 + 2)) || (Setpoint2_1 == 0)) {
+    s2_1 = 1;
+  } else {
+    s2_1 = 0;
+  }
+  if (((temp2_2 &gt;= Setpoint2_2 - 2) &amp;&amp; (temp2_2 &lt;= Setpoint2_2 + 2)) || (Setpoint2_2 == 0)) {
+    s2_2 = 1;
+  } else {
+    s2_2 = 0;
+  }
+  if (((temp2_2 &gt;= Setpoint2_3 - 2) &amp;&amp; (temp2_2 &lt;= Setpoint2_3 + 2)) || (Setpoint2_3 == 0)) {
+    s2_3 = 1;
+  } else {
+    s2_3 = 0;
+  }
+  if (((temp2_3 &gt;= Setpoint2_4 - 2) &amp;&amp; (temp2_3 &lt;= Setpoint2_4 + 2)) || (Setpoint2_4 == 0)) {
+    s2_4 = 1;
+  } else {
+    s2_4 = 0;
+  }
+
+  if ((s1_1 == 1) &amp;&amp; (s1_2 == 1) &amp;&amp; (s1_1 == 1) &amp;&amp; (s1_3 == 1) &amp;&amp; (s1_4 == 1) &amp;&amp; (s2_1 == 1) &amp;&amp; (s2_2 == 1) &amp;&amp; (s2_3 == 1) &amp;&amp; (s2_4 == 1)) {
+    g = g + 1;
+    Serial.println(g);
+    if (command.equals(&quot;reset&quot;)) {
+      g = 0;
+    }
+  }
+  //Protection Code
+  if (command.equals(&quot;zero&quot;)) {
+
+  }
+  else if ((em2.read() &gt; dist2 * 1.3) || (em1.read() &gt; dist1 * 1.3)) {
+    digitalWrite(M2Ph, 0);
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 0);
+    analogWrite(M2En, 0);
+  }
+
+  else if ((em2.read() &lt; -dist2 * 1.3) || (em1.read() &lt; -dist1 * 1.3)) {
+    digitalWrite(M2Ph, 1);
+    digitalWrite(M1Ph, 1);
+    analogWrite(M1En, 0);
+    analogWrite(M2En, 0);
+  }
+
+  //Inch Worm Code
+
+  if ((g &gt;= 200) &amp;&amp; (command.equals(&quot;inch&quot;)) &amp;&amp; (em1.read() &lt; dist1in) &amp;&amp; (em2.read() &lt; dist2in) &amp;&amp; (motion_done == 0) &amp;&amp; (z &lt; cycle) &amp;&amp; (stage == 0)) {
+    digitalWrite(M2Ph, 1);
+    analogWrite(M2En, 0);
+    digitalWrite(M1Ph, 1);
+    analogWrite(M1En, 200);
+  }
+
+  if ((command.equals(&quot;inch&quot;)) &amp;&amp; (em1.read() &gt;= dist1in) &amp;&amp; (em2.read() &lt; dist2in) &amp;&amp; (stage == 0) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 1);
+    analogWrite(M1En, 0);
+    digitalWrite(M2Ph, 1);
+    analogWrite(M2En, 200);
+  }
+
+
+  if ((command.equals(&quot;inch&quot;)) &amp;&amp; (em1.read() &gt;= dist1in) &amp;&amp; (em2.read() &gt;= dist2in) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 200);
+    analogWrite(M2En, 0);
+    stage = 1;
+  }
+
+  if ((command.equals(&quot;inch&quot;)) &amp;&amp; (em1.read() &lt;= 0) &amp;&amp; (em2.read() &gt;= dist2in) &amp;&amp; (stage == 1) &amp;&amp; (z &lt; cycle)) {
+    analogWrite(M1En, 0);
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 200);
+    stage = 1;
+  }
+
+  if ((command.equals(&quot;inch&quot;)) &amp;&amp; (em1.read() &lt;= 0) &amp;&amp; (em2.read() &lt;= 0) &amp;&amp; (stage == 1) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 0);
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 0);
+    stage = 0;
+    motion_done = 0;
+    z = z + 1;
+  }
+
+  //Turtle Code
+
+  if ((g &gt;= 200) &amp;&amp; (command.equals(&quot;turtle&quot;)) &amp;&amp; (em1.read() &lt; dist1turt) &amp;&amp; (em2.read() &lt; dist2turt) &amp;&amp; (motion_done == 0) &amp;&amp; (z &lt; cycle) &amp;&amp; (stage == 0)) {
+    digitalWrite(M2Ph, 1);
+    analogWrite(M2En, 200);
+    digitalWrite(M1Ph, 1);
+    analogWrite(M1En, 200);
+  }
+
+  if ((g &gt;= 200) &amp;&amp; (command.equals(&quot;turtle&quot;)) &amp;&amp; (em1.read() &gt;= dist1turt) &amp;&amp; (stage == 0) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 0);
+  }
+
+  if ((g &gt;= 200) &amp;&amp; (command.equals(&quot;turtle&quot;)) &amp;&amp; (em2.read() &gt;= dist2turt) &amp;&amp; (stage == 0) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 0);
+  }
+
+
+  if ((command.equals(&quot;turtle&quot;)) &amp;&amp; (em1.read() &gt;= dist1turt) &amp;&amp; (em2.read() &gt;= dist2turt) &amp;&amp; (z &lt; cycle) &amp;&amp; (stage == 0)) {
+    stage = 1;
+  }
+
+  if ((command.equals(&quot;turtle&quot;)) &amp;&amp; (em1.read() &gt;= dist1turt) &amp;&amp; (em2.read() &gt;= dist2turt) &amp;&amp; (stage == 1) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 200);
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 200);
+    stage = 1;
+  }
+
+
+  if ((command.equals(&quot;turtle&quot;)) &amp;&amp; (em1.read() &lt;= 0) &amp;&amp; (stage == 1) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 0);
+    stage = 1;
+  }
+
+  if ((command.equals(&quot;turtle&quot;)) &amp;&amp; (em2.read() &lt;= 0) &amp;&amp; (stage == 1) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 0);
+    stage = 1;
+  }
+
+
+  if ((command.equals(&quot;turtle&quot;)) &amp;&amp; (em1.read() &lt;= 0) &amp;&amp; (em2.read() &lt;= 0) &amp;&amp; (stage == 1) &amp;&amp; (z &lt; cycle)) {
+
+
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 0);
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 0);
+    stage = 0;
+    motion_done = 0;
+    z = z + 1;
+  }
+
+  // Undulation Code
+  if ((g &gt;= 200) &amp;&amp; (command.equals(&quot;undulate&quot;)) &amp;&amp; (em1.read() &lt; dist1und) &amp;&amp; (em2.read() &lt; dist2und) &amp;&amp; (motion_done == 0) &amp;&amp; (z &lt; cycle) &amp;&amp; (stage == 0)) {
+    digitalWrite(M2Ph, 1);
+    analogWrite(M2En, 0);
+    digitalWrite(M1Ph, 1);
+    analogWrite(M1En, 200);
+  }
+
+  if ((command.equals(&quot;undulate&quot;)) &amp;&amp; (em1.read() &gt;= dist1und) &amp;&amp; (em2.read() &lt; dist2und) &amp;&amp; (stage == 0) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 1);
+    analogWrite(M1En, 0);
+    digitalWrite(M2Ph, 1);
+    analogWrite(M2En, 200);
+  }
+
+
+  if ((command.equals(&quot;undulate&quot;)) &amp;&amp; (em1.read() &gt;= dist1und) &amp;&amp; (em2.read() &gt;= dist2und) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 200);
+    analogWrite(M2En, 0);
+    stage = 1;
+  }
+
+  if ((command.equals(&quot;undulate&quot;)) &amp;&amp; (em1.read() &lt;= 0) &amp;&amp; (em2.read() &gt;= dist2und) &amp;&amp; (stage == 1) &amp;&amp; (z &lt; cycle)) {
+    analogWrite(M1En, 0);
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 200);
+    stage = 1;
+  }
+
+  if ((command.equals(&quot;undulate&quot;)) &amp;&amp; (em1.read() &lt;= 0) &amp;&amp; (em2.read() &lt;= 0) &amp;&amp; (stage == 1) &amp;&amp; (z &lt; cycle)) {
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 0);
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 0);
+    stage = 0;
+    motion_done = 0;
+    z = z + 1;
+  }
+
+  //End Loco Prime Codes
+
+  if (z == cycle) {
+    motion_done = 1;
+  }
+
+
+  res1_1 = 0;
+  temp1_1 = 0;
+  averageRes1_1 = 0;
+  res1_2 = 0;
+  temp1_2 = 0;
+  averageRes1_2 = 0;
+  res1_3 = 0;
+  temp1_3 = 0;
+  averageRes1_3 = 0;
+  res2_1 = 0;
+  temp2_1 = 0;
+  averageRes2_1 = 0;
+  res2_2 = 0;
+  temp2_2 = 0;
+  averageRes2_2 = 0;
+  res2_3 = 0;
+  temp2_3 = 0;
+  averageRes2_3 = 0;
+  i = 0;
+
+  if ((motion_done == 1) || (command.equals(&quot;zero&quot;))) {
+
+    if (em1.read() &gt; 25) {
+      digitalWrite(M1Ph, 0);
+      analogWrite(M1En, 50);
+    }
+    if (em1.read() &lt; -25) {
+      digitalWrite(M1Ph, 1);
+      analogWrite(M1En, 50);
+    }
+    if (em2.read() &gt; 25) {
+      digitalWrite(M2Ph, 0);
+      analogWrite(M2En, 50);
+    }
+    if (em2.read() &lt; -25) {
+      digitalWrite(M2Ph, 1);
+      analogWrite(M2En, 50);
+    }
+
+    if ((em1.read() &gt;= -25) &amp;&amp; (em1.read() &lt;= 25)) {
+      digitalWrite(M1Ph, 0);
+      analogWrite(M1En, 0);
+    }
+    if ((em2.read() &gt;= -25) &amp;&amp; (em2.read() &lt;= 25)) {
+      digitalWrite(M2Ph, 0);
+      analogWrite(M2En, 0);
+    }
+
+    if (((em1.read() &gt;= -25) &amp;&amp; (em1.read() &lt;= 25)) &amp;&amp; ((em2.read() &gt;= -25) &amp;&amp; (em2.read() &lt;= 25))) {
+      motion_done = 0;
+      analogWrite(M1En, 0);
+      analogWrite(M2En, 0);
+    }
+  }
+
+  if (Serial.available()) {
+    command = Serial.readStringUntil(&#39;\n&#39;);
+
+    if (command.equals(&quot;stop&quot;)) {
+
+      motion_done = 1;
+      z = cycle;
+    }
+  }
+
+  if ((z == cycle) &amp;&amp; (motion_done = 0)) {
+    command = &#39;reset&#39;;
+    z = 0;
+    g = 0;
+  }
+
+  if (command.equals(&quot;setP1&quot;)) {
+    digitalWrite(M1Ph, 1);
+    analogWrite(M1En, 50);
+  }
+  if (command.equals(&quot;setN1&quot;)) {
+    digitalWrite(M1Ph, 0);
+    analogWrite(M1En, 50);
+  }
+
+  if (command.equals(&quot;setP2&quot;)) {
+    digitalWrite(M2Ph, 1);
+    analogWrite(M2En, 50);
+  }
+  if (command.equals(&quot;setN2&quot;)) {
+    digitalWrite(M2Ph, 0);
+    analogWrite(M2En, 50);
+  }
+
+
+  Serial.print(&quot;Encoder 1    &quot;);
+  Serial.println(em1.read());
+  Serial.print(&quot;Encoder 2    &quot;);
+  Serial.println(em2.read());
+
+  delay(50);
+
+}
+</code></pre>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>
+

@@ -1,0 +1,1479 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Amphibious Arduino MKR BLE Firmware | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Source Code</p><h1>Amphibious Arduino MKR BLE Firmware</h1><p>Arduino MKR BLE firmware for untethered SMART mode control, coordinating leg motors, heating, TCA actuation, morphing, swimming, walking, and push-off behavior.</p><div class="actions"><a class="button primary" href="assets/code/amphibious-arduino-mkr-ble.ino">Open raw file</a><a class="button" href="software.html">Back to software</a></div></div></section>
+  <main class="shell">
+    <section class="section">
+      <pre class="code-view"><code class="language-cpp">#include &lt;ArduinoBLE.h&gt;
+#include &lt;Encoder.h&gt;
+
+
+BLEService ledService(&quot;19B10000-E8F2-537E-4F6C-D104768A1214&quot;);
+
+BLEByteCharacteristic switchCharacteristic(&quot;19B10001-E8F2-537E-4F6C-D104768A1214&quot;, BLERead | BLEWrite);
+
+const int M1 = A3;
+const int M2 = A4;
+const int M4 = 3;
+const int M3 = 2;
+const int HeatTime = 25000;
+const int resis = 12;
+const int tca = 10;
+const int tca2 = 0;
+int t = 16000;
+
+const int M4Phase = A6;
+const int M3Phase = A5;
+const int M1Phase = A0;
+const int M2Phase = A2;
+
+int err1 = 0;
+int err2 = 0;
+int err3 = 0;
+int err4 = 0;
+
+int count = 1;
+int counts = 1;
+int Bent = 0;
+
+int pwm1 = 127;
+int pwm2 = 127;
+int pwm3 = 127;
+int pwm4 = 127;
+
+int menuPrinted = 0;
+
+Encoder em4(A1, 1);
+Encoder em3(4, 5);
+Encoder em2(6, 7);
+Encoder em1(8, 9);
+
+long distance1;
+long distance2;
+long distance3;
+long distance4;
+
+long newm1 = 0;
+long newm2 = 0;
+long newm3 = 0;
+long newm4 = 0;
+
+long positionm1 = -999;
+long positionm2 = -999;
+long positionm3 = -999;
+long positionm4 = -999;
+
+
+
+
+void setup() {
+
+  pinMode(M1, OUTPUT);
+  pinMode(M2, OUTPUT);
+  pinMode(M3, OUTPUT);
+  pinMode(M4, OUTPUT);
+  pinMode(M1Phase, OUTPUT);
+  pinMode(M2Phase, OUTPUT);
+  pinMode(M3Phase, OUTPUT);
+  pinMode(M4Phase, OUTPUT);
+
+  pinMode(resis, OUTPUT);
+  pinMode(tca, OUTPUT);
+  pinMode(tca2, OUTPUT);
+
+  Serial.begin(9600);
+
+  em1.write(0);
+
+  em2.write(0);
+
+  em3.write(0);
+
+  em4.write(0);
+
+
+  Serial.begin(9600);
+
+
+  // begin initialization
+  if (!BLE.begin()) {
+    Serial.println(&quot;starting Bluetooth&#194;&#174; Low Energy module failed!&quot;);
+
+    while (1);
+
+  }
+
+  // set advertised local name and service UUID:
+  BLE.setLocalName(&quot;Flopsy&quot;);
+  BLE.setAdvertisedService(ledService);
+
+  // add the characteristic to the service
+  ledService.addCharacteristic(switchCharacteristic);
+
+  // add service
+  BLE.addService(ledService);
+
+  // set the initial value for the characeristic:
+  switchCharacteristic.writeValue(0);
+
+  // start advertising
+  BLE.advertise();
+
+  Serial.println(&quot;Flopsy Starting&quot;);
+}
+
+void loop() {
+
+  if ((Serial) &amp;&amp; menuPrinted != 1) {
+    Serial.println(&quot; &quot;);
+    Serial.println(&quot; &quot;);
+    Serial.println(&quot;-----------------------------------&quot;);
+    Serial.println(&quot;Menu&quot;);
+    Serial.println(&quot;[1]   Terrestrial Movement&quot;);
+    Serial.println(&quot;[2]   Swimming Gait&quot;);
+    Serial.println(&quot;[5]   Morph (must start unbent)&quot;);
+    Serial.println(&quot;[6]   Heat and Set Motors to 0&quot;);
+    Serial.println(&quot;[7]   Reset Encoders&quot;);
+    Serial.println(&quot;[8]   Heat Legs for Swimming&quot;);
+    Serial.println(&quot;[9]   Push Off&quot;);
+    Serial.println(&quot;-----------------------------------&quot;);
+    Serial.println(&quot; &quot;);
+    Serial.println(&quot;Use LightBLue to connect to Flopsy bluetooth&quot;);
+
+    menuPrinted = 1;
+  }
+
+  // listen for Bluetooth&#194;&#174; Low Energy peripherals to connect:
+  BLEDevice central = BLE.central();
+
+  // if a central is connected to peripheral:
+  if (central) {
+    Serial.print(&quot;Connected to central: &quot;);
+    // print the central&#39;s MAC address:
+    Serial.println(central.address());
+
+    // while the central is still connected to peripheral:
+    while (central.connected()) {
+      // if the remote device wrote to the characteristic,
+      // use the value to control the LED:
+
+      if (switchCharacteristic.value() == 1) {
+
+        digitalWrite(M1Phase, 0);//
+        digitalWrite(M2Phase, 0);//
+        digitalWrite(M3Phase, 1);//
+        digitalWrite(M4Phase, 1);//
+
+
+        distance1 = 190 * 12 * count;
+        distance4 = -190 * 12 * count;
+
+        analogWrite(M1, 127);
+        analogWrite(M4, 127);
+
+        while ((em4.read() &gt; distance4) || (em1.read() &lt; distance1)) {
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+
+          }
+
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+
+          }
+
+          if (em1.read() != newm1) {
+            pwm1 = 127;
+
+          }
+
+
+          if (em4.read() != newm4) {
+            pwm4 = 127;
+
+          }
+
+          analogWrite(M1, pwm1);
+          analogWrite(M4, pwm4);
+
+          if (em1.read() &gt; distance1) {
+            analogWrite(M1, 0);
+            if (em4.read() &lt; distance4) {
+              analogWrite(M4, 0);
+            }
+          }
+
+
+          if (em4.read() &lt; distance4) {
+            analogWrite(M4, 0);
+            if (em1.read() &gt; distance1) {
+              analogWrite(M1, 0);
+            }
+          }
+
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+        }
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+
+
+
+        distance3 = -190 * 12 * count;
+        distance2 = 190 * 12 * count;
+        analogWrite(M3, 127);
+        analogWrite(M2, 127);
+
+        while ((em3.read() &gt; distance3) || (em2.read() &lt; distance2)) {
+
+
+          if (em2.read() == newm2) {
+            pwm2 = pwm2 + 1;
+
+          }
+
+
+          if (em3.read() == newm3) {
+            pwm3 = pwm3 + 1;
+
+          }
+
+          if (em2.read() != newm2) {
+            pwm2 = 127;
+
+          }
+
+          if (em3.read() != newm3) {
+            pwm3 = 127;
+
+          }
+
+
+
+
+          analogWrite(M2, pwm2);
+          analogWrite(M3, pwm3);
+
+
+          if (em3.read() &lt; distance3) {
+            analogWrite(M3, 0);
+            if (em2.read() &gt; distance2) {
+              analogWrite(M2, 0);
+            }
+          }
+
+
+          if (em2.read() &gt; distance2) {
+            analogWrite(M2, 0);
+            if (em3.read() &lt; distance3) {
+              analogWrite(M3, 0);
+            }
+          }
+          newm3 = em3.read();
+          newm2 = em2.read();
+
+          if (newm2 != positionm2 || newm3 != positionm3) {
+            Serial.print(&quot;position3 = &quot;);
+            Serial.print(newm3);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position2 = &quot;);
+            Serial.print(newm2);
+
+            Serial.println();
+            positionm3 = newm3;
+            positionm2 = newm2;
+          }
+        }
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+
+
+        if (count == 2) {
+          err1 = em1.read() - distance1;
+          err2 = em2.read() - distance2;
+          err3 = em3.read() - distance3;
+          err4 = em4.read() - distance4;
+
+          em1.write(err1);
+          em2.write(err2);
+          em3.write(err3);
+          em4.write(err4);
+
+        }
+
+        count = count + 1;
+        if (count == 3) {
+          count = 1;
+        }
+
+
+
+        Serial.println(&quot;Count is&quot;);
+        Serial.println(count);
+      }
+
+      if (switchCharacteristic.value() == 2) {
+
+        Serial.print(&quot;swim&quot;);
+
+        digitalWrite(M1Phase, 0);// (forward)
+        digitalWrite(M2Phase, 1);// (backward)
+        digitalWrite(M3Phase, 0);// (backward)
+        digitalWrite(M4Phase, 1);// (forward)
+
+
+
+        distance1 = 50; // neg=forward
+        distance4 = -50 ;
+        distance2 = -50 ; // neg=forward
+        distance3 = 50 ;
+
+        analogWrite(M1, 127);
+        analogWrite(M4, 127);
+
+
+        while ((em4.read() &gt; distance4) || (em1.read() &lt; distance1)) {
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+
+          }
+
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+
+          }
+
+          if (em1.read() != newm1) {
+            pwm1 = 127;
+
+          }
+
+
+          if (em4.read() != newm4) {
+            pwm4 = 127;
+
+          }
+
+          analogWrite(M1, pwm1);
+          analogWrite(M4, pwm4);
+
+          if (em1.read() &gt;= distance1) {
+            analogWrite(M1, 0);
+          }
+          if (em4.read() &lt;= distance4) {
+            analogWrite(M4, 0);
+          }
+
+
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+
+        } //end of phase1 swim
+
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+        delay(300);
+        //reverse
+        digitalWrite(M1Phase, 1);// (backward)
+        digitalWrite(M2Phase, 0);// (forward)
+        digitalWrite(M3Phase, 1);// (forward)
+        digitalWrite(M4Phase, 0);// (backward)
+
+
+        distance1 = -380 * 2.5;
+        distance4 = 380 * 2.5 ;
+
+
+        analogWrite(M1, 127);
+        analogWrite(M4, 127);
+
+
+        while ((em4.read() &lt; distance4) || (em1.read() &gt; distance1)) {
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+
+          }
+
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+
+          }
+
+          if (em1.read() != newm1) {
+            pwm1 = 127;
+
+          }
+
+
+          if (em4.read() != newm4) {
+            pwm4 = 127;
+
+          }
+
+          analogWrite(M1, pwm1);
+          analogWrite(M4, pwm4);
+
+          if (em1.read() &lt;= distance1) {
+            analogWrite(M1, 0);
+          }
+          if (em4.read() &gt;= distance4) {
+            analogWrite(M4, 0);
+          }
+
+
+
+
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+
+        } //end of second phase swim
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+
+        counts = counts + 1;
+        delay(300);
+
+      }
+
+      analogWrite(M1, 0);
+      analogWrite(M2, 0);
+      analogWrite(M3, 0);
+      analogWrite(M4, 0);
+
+      if (switchCharacteristic.value() == 7) {
+        Serial.println(&quot;Reset Encoder&quot;);
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+        em2.write(0);
+        em3.write(0);
+        em4.write(0);
+        em1.write(0);
+
+        count = 1;
+      }
+
+      if (switchCharacteristic.value() == 5) {
+        Serial.println(&quot;Select 5: Morph&quot;);
+
+
+        digitalWrite(M1Phase, 0); //forward
+        digitalWrite(M2Phase, 0);
+        digitalWrite(M3Phase, 1);
+        digitalWrite(M4Phase, 1);
+
+
+
+        distance1 = 380 * 3; // neg=forward
+        distance4 = -380 * 3;
+        distance2 = 380 * 3; // neg=forward
+        distance3 = -380 * 3;
+
+        analogWrite(M1, 127);
+        analogWrite(M4, 127);
+        analogWrite(M2, 127);
+        analogWrite(M3, 127);
+
+        while ((em4.read() &gt;  distance4) || (em1.read() &lt; distance1) || (em3.read() &gt; distance3) || (em2.read() &lt; distance2)) {
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+          }
+
+          if (em2.read() == newm2) {
+            pwm2 = pwm2 + 1;
+          }
+
+          if (em3.read() == newm3) {
+            pwm3 = pwm3 + 1;
+          }
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+          }
+
+
+          if (em1.read() != newm1) {
+            pwm1 = 127;
+          }
+
+          if (em2.read() != newm2) {
+            pwm2 = 127;
+          }
+
+          if (em3.read() != newm3) {
+            pwm3 = 127;
+          }
+
+          if (em4.read() != newm4) {
+            pwm4 = 127;
+          }
+
+          if (em1.read() &gt;= distance1) {
+            analogWrite(M1, 0);
+          }
+          if (em4.read() &lt;= distance4) {
+            analogWrite(M4, 0);
+          }
+          if (em2.read() &gt;= distance2) {
+            analogWrite(M2, 0);
+          }
+          if (em3.read() &lt;= distance3) {
+            analogWrite(M3, 0);
+          }
+
+
+          newm2 = em2.read();
+          newm3 = em3.read();
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+
+          if (newm2 != positionm2 || newm3 != positionm3) {
+            Serial.print(&quot;position3 = &quot;);
+            Serial.print(newm3);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position2 = &quot;);
+            Serial.print(newm2);
+
+            Serial.println();
+            positionm3 = newm3;
+            positionm2 = newm2;
+          }
+        } //90 degree bend
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+        Serial.println(&quot;Heating!&quot;);
+        analogWrite(resis, 255);
+        delay(HeatTime);
+        Serial.println(&quot;Heating Complete!&quot;);
+        analogWrite(resis, 0);
+
+        Serial.println(&quot;Actuating TCA!&quot;);
+        analogWrite(tca, 255);
+        analogWrite(tca2, 255);
+        delay(t);
+        //-------------------------------------------------------------Dip into water======================================================
+
+
+        digitalWrite(M1Phase, 0); //forward
+        digitalWrite(M2Phase, 0);
+        digitalWrite(M3Phase, 1);
+        digitalWrite(M4Phase, 1);
+
+
+
+        distance1 = 380 * 6; // neg=forward
+        distance4 = -380 * 6;
+        distance2 = 380 * 6; // neg=forward
+        distance3 = -380 * 6;
+
+        analogWrite(M1, 80);
+        analogWrite(M4, 80);
+        analogWrite(M2, 80);
+        analogWrite(M3, 80);
+
+        while ((em4.read() &gt;  distance4) || (em1.read() &lt; distance1) || (em3.read() &gt; distance3) || (em2.read() &lt; distance2)) {
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+          }
+
+          if (em2.read() == newm2) {
+            pwm2 = pwm2 + 1;
+          }
+
+          if (em3.read() == newm3) {
+            pwm3 = pwm3 + 1;
+          }
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+          }
+
+
+          if (em1.read() != newm1) {
+            pwm1 = 80;
+          }
+
+          if (em2.read() != newm2) {
+            pwm2 = 80;
+          }
+
+          if (em3.read() != newm3) {
+            pwm3 = 80;
+          }
+
+          if (em4.read() != newm4) {
+            pwm4 = 80;
+          }
+
+          if (em1.read() &gt;= distance1) {
+            analogWrite(M1, 0);
+          }
+          if (em4.read() &lt;= distance4) {
+            analogWrite(M4, 0);
+          }
+          if (em2.read() &gt;= distance2) {
+            analogWrite(M2, 0);
+          }
+          if (em3.read() &lt;= distance3) {
+            analogWrite(M3, 0);
+          }
+
+
+          newm2 = em2.read();
+          newm3 = em3.read();
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+
+          if (newm2 != positionm2 || newm3 != positionm3) {
+            Serial.print(&quot;position3 = &quot;);
+            Serial.print(newm3);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position2 = &quot;);
+            Serial.print(newm2);
+
+            Serial.println();
+            positionm3 = newm3;
+            positionm2 = newm2;
+          }
+        } //90 degree bend
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+        delay(2000);
+        //analogWrite(tca,255*.11);
+        //delay(12*t);
+        analogWrite(tca, 0);
+        analogWrite(tca2, 0);
+        Serial.println(&quot;Actuating TCA Complete!&quot;);
+
+        analogWrite(resis, 0);
+        analogWrite(tca, 0);
+        analogWrite(tca2, 0);
+
+        switchCharacteristic.writeValue(0);
+
+
+
+      }
+
+      if (switchCharacteristic.value() == 6) {
+        Serial.println(&quot;Select 6: Reheat&quot;);
+
+
+        digitalWrite(M1Phase, 0); //forward
+        digitalWrite(M2Phase, 0);
+        digitalWrite(M3Phase, 1);
+        digitalWrite(M4Phase, 1);
+
+
+
+        distance1 = 380 * 3; // neg=forward
+        distance4 = -380 * 3;
+        distance2 = 380 * 3; // neg=forward
+        distance3 = -380 * 3;
+
+        analogWrite(M1, 127);
+        analogWrite(M4, 127);
+        analogWrite(M2, 127);
+        analogWrite(M3, 127);
+
+        while ((em4.read() &gt;  distance4) || (em1.read() &lt; distance1) || (em3.read() &gt; distance3) || (em2.read() &lt; distance2)) {
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+          }
+
+          if (em2.read() == newm2) {
+            pwm2 = pwm2 + 1;
+          }
+
+          if (em3.read() == newm3) {
+            pwm3 = pwm3 + 1;
+          }
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+          }
+
+
+          if (em1.read() != newm1) {
+            pwm1 = 127;
+          }
+
+          if (em2.read() != newm2) {
+            pwm2 = 127;
+          }
+
+          if (em3.read() != newm3) {
+            pwm3 = 127;
+          }
+
+          if (em4.read() != newm4) {
+            pwm4 = 127;
+          }
+
+          if (em1.read() &gt;= distance1) {
+            analogWrite(M1, 0);
+          }
+          if (em4.read() &lt;= distance4) {
+            analogWrite(M4, 0);
+          }
+          if (em2.read() &gt;= distance2) {
+            analogWrite(M2, 0);
+          }
+          if (em3.read() &lt;= distance3) {
+            analogWrite(M3, 0);
+          }
+
+
+          newm2 = em2.read();
+          newm3 = em3.read();
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+
+          if (newm2 != positionm2 || newm3 != positionm3) {
+            Serial.print(&quot;position3 = &quot;);
+            Serial.print(newm3);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position2 = &quot;);
+            Serial.print(newm2);
+
+            Serial.println();
+            positionm3 = newm3;
+            positionm2 = newm2;
+          }
+        } //90 degree bend
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+        Serial.println(&quot;Heating!&quot;);
+        analogWrite(resis, 255);
+        delay(8000);
+        Serial.println(&quot;Heating Complete!&quot;);
+        analogWrite(resis, 0);
+
+
+        //-------------------------------------------------------------Dip into water======================================================
+
+
+        digitalWrite(M1Phase, 0); //forward
+        digitalWrite(M2Phase, 0);
+        digitalWrite(M3Phase, 1);
+        digitalWrite(M4Phase, 1);
+
+
+
+        distance1 = 380 * 6; // neg=forward
+        distance4 = -380 * 6;
+        distance2 = 380 * 6; // neg=forward
+        distance3 = -380 * 6;
+
+        analogWrite(M1, 80);
+        analogWrite(M4, 80);
+        analogWrite(M2, 80);
+        analogWrite(M3, 80);
+
+        while ((em4.read() &gt;  distance4) || (em1.read() &lt; distance1) || (em3.read() &gt; distance3) || (em2.read() &lt; distance2)) {
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+          }
+
+          if (em2.read() == newm2) {
+            pwm2 = pwm2 + 1;
+          }
+
+          if (em3.read() == newm3) {
+            pwm3 = pwm3 + 1;
+          }
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+          }
+
+
+          if (em1.read() != newm1) {
+            pwm1 = 80;
+          }
+
+          if (em2.read() != newm2) {
+            pwm2 = 80;
+          }
+
+          if (em3.read() != newm3) {
+            pwm3 = 80;
+          }
+
+          if (em4.read() != newm4) {
+            pwm4 = 80;
+          }
+          if (em1.read() &gt;= distance1) {
+            analogWrite(M1, 0);
+          }
+          if (em4.read() &lt;= distance4) {
+            analogWrite(M4, 0);
+          }
+          if (em2.read() &gt;= distance2) {
+            analogWrite(M2, 0);
+          }
+          if (em3.read() &lt;= distance3) {
+            analogWrite(M3, 0);
+          }
+
+
+          newm2 = em2.read();
+          newm3 = em3.read();
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+
+          if (newm2 != positionm2 || newm3 != positionm3) {
+            Serial.print(&quot;position3 = &quot;);
+            Serial.print(newm3);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position2 = &quot;);
+            Serial.print(newm2);
+
+            Serial.println();
+            positionm3 = newm3;
+            positionm2 = newm2;
+          }
+        } //90 degree bend
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+        //analogWrite(tca,255*.11);
+        //delay(12*t);
+        analogWrite(tca, 0);
+        analogWrite(tca2, 0);
+        Serial.println(&quot;Actuating TCA Complete!&quot;);
+
+        analogWrite(resis, 0);
+        analogWrite(tca, 0);
+        analogWrite(tca2, 0);
+        switchCharacteristic.writeValue(0);
+
+
+
+      }
+
+      if (switchCharacteristic.value() == 8) {
+        Serial.println(&quot;Morph Straight&quot;);
+
+
+        digitalWrite(M1Phase, 0); //forward
+        digitalWrite(M2Phase, 0);
+        digitalWrite(M3Phase, 1);
+        digitalWrite(M4Phase, 1);
+
+
+
+        distance1 = 380 * 5; // neg=forward
+        distance4 = -380 * 5;
+        distance2 = 380 * 5; // neg=forward
+        distance3 = -380 * 5;
+
+        analogWrite(M1, 127);
+        analogWrite(M4, 127);
+        analogWrite(M2, 127);
+        analogWrite(M3, 127);
+
+        while ((em4.read() &gt;  distance4) || (em1.read() &lt; distance1) || (em3.read() &gt; distance3) || (em2.read() &lt; distance2)) {
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+          }
+
+          if (em2.read() == newm2) {
+            pwm2 = pwm2 + 1;
+          }
+
+          if (em3.read() == newm3) {
+            pwm3 = pwm3 + 1;
+          }
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+          }
+
+
+          if (em1.read() != newm1) {
+            pwm1 = 127;
+          }
+
+          if (em2.read() != newm2) {
+            pwm2 = 127;
+          }
+
+          if (em3.read() != newm3) {
+            pwm3 = 127;
+          }
+
+          if (em4.read() != newm4) {
+            pwm4 = 127;
+          }
+
+          if (em1.read() &gt;= distance1) {
+            analogWrite(M1, 0);
+          }
+          if (em4.read() &lt;= distance4) {
+            analogWrite(M4, 0);
+          }
+          if (em2.read() &gt;= distance2) {
+            analogWrite(M2, 0);
+          }
+          if (em3.read() &lt;= distance3) {
+            analogWrite(M3, 0);
+          }
+
+
+          newm2 = em2.read();
+          newm3 = em3.read();
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+
+          if (newm2 != positionm2 || newm3 != positionm3) {
+            Serial.print(&quot;position3 = &quot;);
+            Serial.print(newm3);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position2 = &quot;);
+            Serial.print(newm2);
+
+            Serial.println();
+            positionm3 = newm3;
+            positionm2 = newm2;
+          }
+        } //90 degree bend
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+        Serial.println(&quot;Heating!&quot;);
+        analogWrite(resis, 255);
+        delay(35000);
+        Serial.println(&quot;Heating Complete!&quot;);
+        analogWrite(resis, 0);
+
+
+        //-------------------------------------------------------------Dip into water======================================================
+
+        /*
+                digitalWrite(M1Phase, 0); //forward
+                digitalWrite(M2Phase, 0);
+                digitalWrite(M3Phase, 1);
+                digitalWrite(M4Phase, 1);
+
+
+
+                distance1 = 380 * 6; // neg=forward
+                distance4 = -380 * 6;
+                distance2 = 380 * 6; // neg=forward
+                distance3 = -380 * 6;
+
+                analogWrite(M1, 80);
+                analogWrite(M4, 80);
+                analogWrite(M2, 80);
+                analogWrite(M3, 80);
+
+                while ((em4.read() &gt;  distance4) || (em1.read() &lt; distance1) || (em3.read() &gt; distance3) || (em2.read() &lt; distance2)) {
+
+                  if (em1.read() == newm1) {
+                    pwm1 = pwm1 + 1;
+                  }
+
+                  if (em2.read() == newm2) {
+                    pwm2 = pwm2 + 1;
+                  }
+
+                  if (em3.read() == newm3) {
+                    pwm3 = pwm3 + 1;
+                  }
+
+                  if (em4.read() == newm4) {
+                    pwm4 = pwm4 + 1;
+                  }
+
+
+                  if (em1.read() != newm1) {
+                    pwm1 = 80;
+                  }
+
+                  if (em2.read() != newm2) {
+                    pwm2 = 80;
+                  }
+
+                  if (em3.read() != newm3) {
+                    pwm3 = 80;
+                  }
+
+                  if (em4.read() != newm4) {
+                    pwm4 = 80;
+                  }
+                  if (em1.read() &gt;= distance1) {
+                    analogWrite(M1, 0);
+                  }
+                  if (em4.read() &lt;= distance4) {
+                    analogWrite(M4, 0);
+                  }
+                  if (em2.read() &gt;= distance2) {
+                    analogWrite(M2, 0);
+                  }
+                  if (em3.read() &lt;= distance3) {
+                    analogWrite(M3, 0);
+                  }
+
+
+                  newm2 = em2.read();
+                  newm3 = em3.read();
+                  newm1 = em1.read();
+                  newm4 = em4.read();
+
+                  if (newm4 != positionm4 || newm1 != positionm1) {
+                    Serial.print(&quot;position1 = &quot;);
+                    Serial.print(newm1);
+                    Serial.print(&quot;   &quot;);
+                    Serial.print(&quot;position4 = &quot;);
+                    Serial.print(newm4);
+
+                    Serial.println();
+                    positionm1 = newm1;
+                    positionm4 = newm4;
+                  }
+
+                  if (newm2 != positionm2 || newm3 != positionm3) {
+                    Serial.print(&quot;position3 = &quot;);
+                    Serial.print(newm3);
+                    Serial.print(&quot;   &quot;);
+                    Serial.print(&quot;position2 = &quot;);
+                    Serial.print(newm2);
+
+                    Serial.println();
+                    positionm3 = newm3;
+                    positionm2 = newm2;
+                  }
+                } //90 degree bend
+        */
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+        //analogWrite(tca,255*.11);
+        //delay(12*t);
+        analogWrite(tca, 0);
+        analogWrite(tca2, 0);
+        Serial.println(&quot;Actuating TCA Complete!&quot;);
+
+        analogWrite(resis, 0);
+        analogWrite(tca, 0);
+        analogWrite(tca2, 0);
+        delay(3000);
+        switchCharacteristic.writeValue(0);
+
+
+
+      }
+
+      if (switchCharacteristic.value() == 0) {
+
+
+
+
+
+        distance1 = 0;
+        distance2 = 0;
+        distance3 = 0;
+        distance4 = 0;
+
+        //all encoders move neg
+        digitalWrite(M1Phase, 1);//
+        digitalWrite(M2Phase, 1);//
+        digitalWrite(M3Phase, 0);//
+        digitalWrite(M4Phase, 0);//
+
+
+        while ((em1.read() &gt; 5) || (em2.read() &gt; 5) || (em3.read() &lt; -5) || (em4.read() &lt; -5)) {
+          if (em1.read() &gt; 5) {
+            analogWrite(M1, 80);
+          }
+          if (em2.read() &gt; 5) {
+            analogWrite(M2, 80);
+          }
+          if (em3.read() &lt; -5) {
+            analogWrite(M3, 80);
+          }
+          if (em4.read() &lt; -5) {
+            analogWrite(M4, 80);
+          }
+          if (em1.read() &lt;= 5) {
+            analogWrite(M1, 0);
+          }
+          if (em2.read() &lt;= 5) {
+            analogWrite(M2, 0);
+          }
+          if (em3.read() &gt;= -5) {
+            analogWrite(M3, 0);
+          }
+          if (em4.read() &gt;= -5) {
+            analogWrite(M4, 0);
+          }
+        }
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+        //all encoders move positive
+
+        digitalWrite(M1Phase, 0);//
+        digitalWrite(M2Phase, 0);//
+        digitalWrite(M3Phase, 1);//
+        digitalWrite(M4Phase, 1);//
+
+        while ((em1.read() &lt; -5) || (em2.read() &lt; -5) || (em3.read() &gt; 5) || (em4.read() &gt; 5)) {
+          if (em1.read() &lt; -5) {
+            analogWrite(M1, 80);
+          }
+          if (em2.read() &lt; -5) {
+            analogWrite(M2, 80);
+          }
+          if (em3.read() &gt; 5) {
+            analogWrite(M3, 80);
+          }
+          if (em4.read() &gt; 5) {
+            analogWrite(M4, 80);
+          }
+          if (em1.read() &gt;= -5) {
+            analogWrite(M1, 0);
+          }
+          if (em2.read() &gt;= -5) {
+            analogWrite(M2, 0);
+          }
+          if (em3.read() &lt;= 5) {
+            analogWrite(M3, 0);
+          }
+          if (em4.read() &lt;= 5) {
+            analogWrite(M4, 0);
+          }
+        }
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+
+
+
+      }
+
+
+
+      if (switchCharacteristic.value() == 9) {
+
+        Serial.print(&quot;push off&quot;);
+        // Raise back legs
+
+        digitalWrite(M1Phase, 1);// (backward)
+
+        digitalWrite(M4Phase, 0);// (backward)
+
+
+        distance1 = -380 * 1.7;
+        distance4 = 380 * 1.7 ;
+
+
+        analogWrite(M1, 127);
+        analogWrite(M4, 127);
+
+
+        while ((em4.read() &lt; distance4) || (em1.read() &gt; distance1)) {
+
+
+
+
+          if (em1.read() == newm1) {
+            pwm1 = pwm1 + 1;
+
+          }
+
+
+          if (em4.read() == newm4) {
+            pwm4 = pwm4 + 1;
+
+          }
+
+          if (em1.read() != newm1) {
+            pwm1 = 127;
+
+          }
+
+
+          if (em4.read() != newm4) {
+            pwm4 = 127;
+
+          }
+
+          analogWrite(M1, pwm1);
+          analogWrite(M4, pwm4);
+
+          if (em1.read() &lt;= distance1) {
+            analogWrite(M1, 0);
+          }
+          if (em4.read() &gt;= distance4) {
+            analogWrite(M4, 0);
+          }
+
+
+
+
+          newm1 = em1.read();
+          newm4 = em4.read();
+
+          if (newm4 != positionm4 || newm1 != positionm1) {
+            Serial.print(&quot;position1 = &quot;);
+            Serial.print(newm1);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position4 = &quot;);
+            Serial.print(newm4);
+
+            Serial.println();
+            positionm1 = newm1;
+            positionm4 = newm4;
+          }
+
+        } //end of second phase swim
+
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+
+
+
+        digitalWrite(M2Phase, 0);//
+        digitalWrite(M3Phase, 1);//
+
+
+
+
+        distance3 = -380 * 12;
+        distance2 = 380 * 12;
+
+        analogWrite(M2, 127);
+        analogWrite(M3, 127);
+
+
+        while ((em3.read() &gt; distance3) || (em2.read() &lt; distance2)) {
+
+          if (em2.read() == newm2) {
+            pwm2 = pwm2 + 1;
+
+          }
+
+
+          if (em3.read() == newm3) {
+            pwm3 = pwm3 + 1;
+
+          }
+
+          if (em2.read() != newm2) {
+            pwm2 = 127;
+
+          }
+
+
+          if (em3.read() != newm3) {
+            pwm3 = 127;
+
+          }
+          analogWrite(M2, pwm2);
+          analogWrite(M3, pwm3);
+
+          if (em2.read() &gt;= distance2) {
+            analogWrite(M2, 0);
+          }
+          if (em3.read() &lt;= distance3) {
+            analogWrite(M3, 0);
+          }
+
+
+          newm2 = em2.read();
+          newm3 = em3.read();
+
+          if (newm3 != positionm3 || newm2 != positionm2) {
+            Serial.print(&quot;position2 = &quot;);
+            Serial.print(newm2);
+            Serial.print(&quot;   &quot;);
+            Serial.print(&quot;position3 = &quot;);
+            Serial.print(newm3);
+
+            Serial.println();
+            positionm2 = newm2;
+            positionm3 = newm3;
+          }
+
+        }
+        analogWrite(M1, 0);
+        analogWrite(M2, 0);
+        analogWrite(M3, 0);
+        analogWrite(M4, 0);
+switchCharacteristic.writeValue(0);
+      }
+    }
+
+    // when the central disconnects, print it out:
+    Serial.print(F(&quot;Disconnected from central: &quot;));
+    Serial.println(central.address());
+  }
+}
+</code></pre>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>
+

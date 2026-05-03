@@ -1,0 +1,211 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TCA and SMP Origami Robot Development | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero">
+    <div class="shell">
+      <p class="eyebrow">TCA and SMP origami</p>
+      <h1>Origami soft robot development across three hardware stages.</h1>
+      <p>Three related systems show the development path from early origami actuation to a Nature Communications TCA-driven SMP surface and a later Philosophical Transactions motor-driven SMP composite robot with variable-stiffness joints.</p>
+    </div>
+  </section>
+
+  <main class="shell">
+    <section class="section tight">
+      <div class="case-snapshot">
+        <div>
+          <p class="snapshot-label">What this page covers</p>
+          <h3>Three stages of SMP and origami robot development.</h3>
+          <p>The evidence traces how the research moved from an early actuation concept into published shape-memory hardware, material characterization, embedded thermal control, locomotion, and adaptive grasping.</p>
+        </div>
+        <ul>
+          <li><strong>Stage 1:</strong> early origami actuation work that exposed limits in heating, recovery, packaging, and actuator authority.</li>
+          <li><strong>Stage 2:</strong> molded SMP surfaces with embedded heating and TCA actuation for programmed bending modes.</li>
+          <li><strong>Stage 3:</strong> PETG/SMP composite VSJs, thermistors, heaters, tendon routing, locomotion, grasping, and Arduino Mega control.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid-3">
+        <div class="panel"><h3>Stage 1: precursor</h3><p>Early origami actuation work established the motion concept and exposed practical limits in heated polymer recovery, cycle life, packaging, and actuator authority.</p></div>
+        <div class="panel"><h3>Stage 2: Nature Communications</h3><p>The TCA-driven SMP origami surface used embedded heating and twisted-and-coiled artificial muscles to produce programmable bends from a lightweight shape-memory body.</p></div>
+        <div class="panel"><h3>Stage 3: Philosophical Transactions</h3><p>The motor-driven SMP composite robot converted the idea into PETG/SMP variable-stiffness joints with thermistors, resistance-wire heating, tendon routing, and closed-loop embedded control.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid-4">
+        <div class="metric"><strong>4</strong><span>VSJs per origami module</span></div>
+        <div class="metric"><strong>13.3%</strong><span>PETG VSJ stiffness reduction per 10 deg C</span></div>
+        <div class="metric"><strong>0.5 deg</strong><span>mean recovery error for PETG composite VSJ</span></div>
+        <div class="metric"><strong>10</strong><span>motion-tracked joint-heating combinations</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Technology evolution</p>
+        <h2>Three stages, three different engineering questions.</h2>
+        <p>The systems share an origami soft-robotics thread, but they should not be collapsed into one project. Each stage answered a different question: can the motion concept work, can a TCA-driven SMP surface create programmable deformation, and can a motor-driven SMP composite module become a measured variable-stiffness robot?</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Stage</th><th>Hardware</th><th>Engineering question</th><th>Demonstrations</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Precursor</td><td>Early origami actuation platform.</td><td>Can selective heating and compliant geometry produce useful origami motion?</td><td>PLA/motor comparison, damage/recovery limits, and the design motivation for a lighter SMP/TCA surface.</td></tr>
+            <tr><td>Nature Communications TCA origami</td><td>Molded SMP surface with embedded heating and TCA actuation.</td><td>Can a lightweight artificial muscle drive programmed bends through heat-selected compliant regions?</td><td>Exploded TCA-origami assembly, fabrication, horizontal/diagonal/V-bend GIFs, segmented bending, and torsion-limit test.</td></tr>
+            <tr><td>Philosophical Transactions SMP composite robot</td><td>PETG/SMP composite modules with four actively heated VSJs per module and motor-driven tendons.</td><td>Can stiffness-programmable joints redirect motor-driven origami motion for locomotion and grasping?</td><td>Material screening, recovery testing, Opti-Track joint-angle measurement, Arduino Mega control, locomotion gaits, and adaptive grasping.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Stage 1: precursor</p>
+        <h2>Early origami actuation established the design problem.</h2>
+        <p>The earliest stage proved that selective heating and origami geometry could redirect motion, but it also exposed the weaknesses that made a new architecture necessary: heated PLA damage, poor recovery, cycle-life limits, and bulky actuation.</p>
+      </div>
+      <div class="grid-4">
+        <figure class="media-contain"><img src="assets/papers/tca/HeatMap.PNG" alt="Heating map for origami movements"><figcaption>A conceptual heating/stiffness map for compression, out-of-plane bending, and torsion.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/tca/ComparisonOldNew.png" alt="PLA motor base versus SMP TCA base"><figcaption>Precursor compared with the later lightweight SMP/TCA concept; the change was driven by packaging, recovery, and actuation limits.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/tca/DamagePLAEdit.png" alt="PLA origami damage after heating"><figcaption>Heated PLA damage and recovery limitations helped motivate the move away from the initial architecture.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/tca/Fabrication.PNG" alt="SMP TCA fabrication"><figcaption>Fabrication process for the molded SMP base and embedded heating elements.</figcaption></figure>
+        </div>
+         <div class="grid-3 source-note">
+        <figure class="media-contain"><img src="assets/papers/tca/CompletedResult.PNG" alt="Completed SMP base with TCA"><figcaption>Completed SMP base with the TCA artificial muscle integrated.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/tca/SegBending.PNG" alt="Segmented bending with SMP TCA base"><figcaption>Segmented bending using softened SMP joints and TCA actuation.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/tca/TorsionBending.PNG" alt="Torsion with SMP TCA base"><figcaption>Torsion result: visible but limited, revealing the force and thermal-management limits that motivated the later motor-driven composite VSJ robot.</figcaption></figure>
+      </div>
+        <div class="panel">
+          <h3>Engineering lesson</h3>
+          <p>The precursor was valuable because it clarified the failure modes. The next stage needed a compact artificial-muscle package, a body material designed for shape memory behavior, and a better way to localize compliant regions.</p>
+        </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Stage 2: Nature Communications TCA origami</p>
+        <h2>Molded SMP surface, embedded heating, and twisted-and-coiled artificial muscle actuation.</h2>
+        <p>The Nature Communications stage is the TCA-driven origami robot: a molded SMP surface with embedded heating and a compact TCA actuator. Selective heating softened chosen regions so the same artificial muscle could produce different bending modes.</p>
+      </div>
+      <div class="grid-1">
+        <figure class="media-contain"><img src="assets/papers/tca_extra/exploded-tca-origami.png" alt="Exploded TCA-driven SMP origami module"><figcaption>Exploded TCA-origami assembly: SMP surface, embedded heating, tendon/actuator routing, and lightweight artificial-muscle package.</figcaption></figure>
+      </div>
+      <div class="grid-3 source-note">
+        <figure class="media-contain"><img src="assets/papers/tca_extra/tca-horizontal-bend.gif" alt="TCA origami horizontal bend GIF"><figcaption>Horizontal bending demonstration: softened SMP regions let the TCA redirect the origami surface into a repeatable bend.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/tca_extra/tca-diagonal-bend.gif" alt="TCA origami diagonal bend GIF"><figcaption>Diagonal bending demonstration: the same actuator/body idea produces a different motion path through selective heating.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/tca_extra/tca-v-bend.gif" alt="TCA origami V bend GIF"><figcaption>V-bend demonstration: selective thermal softening programmed a different motion from the same basic surface and actuator.</figcaption></figure>
+      </div>
+     
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Stage 3: Philosophical Transactions SMP composite robot</p>
+        <h2>Motor-driven composite variable-stiffness origami.</h2>
+        <p>The Philosophical Transactions robot is not the TCA-driven surface. It is a motor-driven PETG/SMP composite origami platform: tendons and motors provide motion, while independently heated variable-stiffness joints redirect the module response.</p>
+      </div>
+      <div class="project-detail">
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image001.png" alt="Composite SMP origami concept and applications"><figcaption>System concept: composite variable-stiffness joints enabling adaptive locomotion and grasping.</figcaption></figure>
+        <div>
+          <ul class="fact-list">
+            <li><strong>Material system:</strong> PETG was selected after comparing Nylon, PLA, PETG, and ABS thermoplastic cores encased in SMP.</li>
+            <li><strong>Stiffness response:</strong> PETG showed the strongest average stiffness reduction, about 13.3% per 10 deg C, with the lowest bending-modulus variation among the tested cores.</li>
+            <li><strong>Recovery behavior:</strong> PETG composite VSJs had the most reliable recovery, with 0.5 deg mean recovery error and 0.6 deg standard deviation after 90 deg bending tests.</li>
+            <li><strong>Robot demonstrations:</strong> Two modules were combined for ground locomotion, and the same mechanism family was used for adaptive grasping.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Fabrication stack</p>
+        <h2>The VSJ is a measured composite, not just a heated hinge.</h2>
+        <p>The manuscript describes a low-cost composite process: mix and degas SMP resin, wet fiberglass scaffolding, place the thermoplastic core, cure the sandwich, trim the module, then add thermistors, resistance-wire heaters, copper tendon guides, and routed tendons.</p>
+      </div>
+      <div class="grid-4">
+        <div class="panel"><h3>SMP resin</h3><p>The composite used a 35% Jeffamine D-400, 5% epoxidized soybean oil, and 60% Epon 828 mixture.</p></div>
+        <div class="panel"><h3>Scaffold</h3><p>0.05 mm fiberglass weave held a uniform SMP layer and centered the thermoplastic core while reducing delamination risk.</p></div>
+        <div class="panel"><h3>Core layer</h3><p>The PETG thermoplastic layer was FDM printed with thin layers to keep the VSJ profile low and geometry repeatable.</p></div>
+        <div class="panel"><h3>Hardware add-ons</h3><p>Thermistors, resistance wires, 28-gauge copper tendon-guide loops, brass crimps, and routed tendons completed the module.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Embedded controller</p>
+        <h2>Arduino Mega firmware coordinates heating, isolation, and motor motion.</h2>
+        <p>The Arduino Mega controller runs two VSJ modules with eight heater PWM outputs, eight relay isolation channels, six thermistors, two encoder motors, and serial gait commands.</p>
+      </div>
+      <div class="grid-4">
+        <div class="metric"><strong>8</strong><span>PWM-controlled MOSFET heating channels</span></div>
+        <div class="metric"><strong>8</strong><span>relay isolation channels for unused heaters</span></div>
+        <div class="metric"><strong>6</strong><span>thermistors across two VSJ modules</span></div>
+        <div class="metric"><strong>40/40/80</strong><span>PID gains Kp/Ki/Kd for heater duty cycle</span></div>
+      </div>
+      <div class="grid-3 section">
+        <div class="panel"><h3>Thermal control</h3><p>Thermistor reads are averaged and converted to temperature; PID outputs set heater PWM for the matching VSJ channel.</p></div>
+        <div class="panel"><h3>Circuit isolation</h3><p>Relay logic disconnects inactive heaters and blocks both opposing diagonal heaters on a module from being active together.</p></div>
+        <div class="panel"><h3>Gait sequencing</h3><p>Serial commands such as inch, undulate, and turtle map to temperature setpoints and encoder-based cable motor stages.</p></div>
+      </div>
+      <p class="source-note"><a class="button" href="software.html">Open controller overview</a> <a class="button" href="code-smp-vsj.html">View Arduino Mega source</a></p>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Material, fabrication, and test infrastructure.</h2>
+        <p>The project combined material characterization, fabrication process development, force testing, motion tracking, and mechanism modeling into a single robot-development workflow.</p>
+      </div>
+      <div class="grid-2">
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image003.png" alt="Composite material stiffness characterization"><figcaption>Material characterization: VSJs were force-tested with a 20 N Mark-10 gauge over 11 temperature points from room temperature to 120 deg C.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image005.png" alt="Composite SMP origami fabrication process"><figcaption>Composite fabrication process for the PETG/SMP variable-stiffness origami module.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image037.png" alt="Experimental setup for composite SMP origami robot"><figcaption>Motion tracking setup: Opti-Track cameras and 3D printed marker clips were used to calculate J1-J4 bending angles in MATLAB.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image047.png" alt="Kinematic model for origami robot"><figcaption>Kinematic model tying tendon routing, joint stiffness, and origami geometry to controllable robot motions.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Motion library, locomotion, and grasping.</h2>
+        <p>The evolved robot demonstrates why variable stiffness is valuable: the same basic module can be reconfigured for different motion paths, then assembled into systems for gait generation and adaptive object interaction. Joint-angle tests covered 10 heating combinations: five horizontal-joint combinations and five diagonal/horizontal combinations.</p>
+      </div>
+      <div class="grid-4">
+        <div class="metric"><strong>0.25</strong><span>body lengths per inchworm cycle</span></div>
+        <div class="metric"><strong>40%</strong><span>lower body height for undulation gait</span></div>
+        <div class="metric"><strong>90 deg C</strong><span>common high-stiffness-change setpoint</span></div>
+        <div class="metric"><strong>5</strong><span>object families used for adaptive grasping</span></div>
+      </div>
+      <div class="grid-3">
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image007.png" alt="Motion characterization of variable-stiffness origami module"><figcaption>Motion characterization: selectively heating J1-J4 redirects tendon-driven bending between horizontal, diagonal, and mixed motion paths.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image029.png" alt="Locomotion gait results for composite origami robot"><figcaption>Two-module locomotion: J4-heated inchworm motion reached about 0.25 body lengths per cycle, while J1-heated undulation reduced maximum body height from about 10 cm to 6 cm.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image031.png" alt="Adaptive grasping results with composite origami robot"><figcaption>Adaptive grasping: different heating patterns handled ping pong and wiffle balls, a box, a jar lid, and a lightbulb with rounded, flat, and twisting contact strategies.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Variable-stiffness mechanism experience</p>
+        <h2>Thermally tunable compliance applied to robot motion.</h2>
+        <p>The same engineering themes carry into later compliant-hand work: living hinges, controlled stiffness changes, tendon routing, thermal-mechanical characterization, and robot-level validation.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><h3>Mechanism design</h3><p>Experience designing living hinges, tendon guides, and compliance-controlled motion paths.</p></div>
+        <div class="panel"><h3>Thermal-mechanical testing</h3><p>Experience linking material stiffness, temperature, actuation, recovery, and robot-level behavior.</p></div>
+        <div class="panel"><h3>Embedded control</h3><p>Experience turning thermistor readings into PWM heater control with isolation hardware and tuned PID values.</p></div>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>

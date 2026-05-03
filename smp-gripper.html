@@ -1,0 +1,95 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SMP Gripper | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Soft robotic gripper</p><h1>Variable-stiffness bistable SMP gripper.</h1><p>A 6.8 g compliant gripper that is soft during capture, snaps closed from contact force, then cools into a rigid holding state. The design combines an embedded Joule-heated SMP palm, a pre-stretched Ecoflex bias layer, elastic rings, and a motor-driven reset mount.</p></div></section>
+  <main class="shell">
+    <section class="section tight">
+      <div class="case-snapshot">
+        <div>
+          <p class="snapshot-label">What this page covers</p>
+          <h3>A small variable-stiffness gripper with measured holding force.</h3>
+          <p>This page covers the bistable SMP gripper design: the heater and SMP palm, the pre-stretched Ecoflex layer, the motorized reset mount, and the force tests used to characterize grasping and holding.</p>
+        </div>
+        <ul>
+          <li><strong>Mechanism:</strong> soft grasping above glass transition, passive snap closure, and rigid holding after cooling.</li>
+          <li><strong>Build:</strong> SMP palm, flexible heater, Ecoflex bias layer, elastic rings, and string-driven reset mount.</li>
+          <li><strong>Testing:</strong> trigger force, temperature-dependent gripping and holding curves, 3.93 N maximum holding force, and hardware demonstrations.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid-3">
+        <div class="metric"><strong>3.93 N</strong><span>reported maximum holding force</span></div>
+        <div class="metric"><strong>400.74 g</strong><span>equivalent held mass from rigid-state force test</span></div>
+        <div class="metric"><strong>&lt;0.5 N</strong><span>passive trigger force measured in closing tests</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Mechanism and fabrication</p>
+        <h2>Soft when grasping, rigid when holding.</h2>
+        <p>The mechanism is a hybrid of soft and rigid grasping. Above glass transition, the SMP palm and fingers become compliant enough to conform and snap between open and closed states. Below glass transition, the same shape freezes into a high-stiffness holder that needs no continuous power.</p>
+      </div>
+      <div class="grid-2">
+        <figure class="media-contain diagram-media"><img src="assets/supporting/GripperWorkingPrinciple.png" alt="SMP gripper bistable energy working principle"><figcaption>Working principle: finger strain energy E_f rises as the pre-stretched layer is stretched, while ring strain energy E_r rises and then recovers. Their sum creates two local energy minima: closed and open.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/gripper/layersmanufacfinal.PNG" alt="SMP gripper layers and fabrication"><figcaption>Layer stack and manufacturing sequence: SMP/heater/SMP palm and fingers are bonded to a pre-stretched Ecoflex bias layer, then trimmed into the four-finger geometry.</figcaption></figure>
+      </div>
+      <div class="grid-4 section compact-section">
+        <div class="panel"><h3>SMP chemistry</h3><p>Jeffamine D400 and Epon 828 were mixed at 37.9/62.1 wt% and cured around the heater to form the shape-memory base.</p></div>
+        <div class="panel"><h3>Heater design</h3><p>Laser-patterned Pyralux AP353500E was acid-etched to about 2.0 ohms, balancing heating power and reliability at roughly 2 A.</p></div>
+        <div class="panel"><h3>Finger geometry</h3><p>Each finger is about 45 mm from the palm center with 5 mm-wide tips, giving enough length for conformal wrap without losing snap-through behavior.</p></div>
+        <div class="panel"><h3>Ring tuning</h3><p>Two Ecoflex 30 rings, based on an 8 mm-wide, 60 mm-perimeter ring, set the open/closed energy minima and the gripping force.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Motor-driven reset mount</p>
+        <h2>The holder makes a passive gripper usable on a test stand or robot.</h2>
+        <p>The gripper closes passively when it is soft and contact force pushes the palm through the bistable transition. Reopening uses a motor, spool, piston, cap, base frame, and four nylon strings to pull the softened fingers back to the open state without asking the SMP shape-memory force to do all the work.</p>
+      </div>
+      <div class="grid-3">
+        <figure class="media-contain"><img src="assets/papers/gripper/motor-mount-labeled.jpg" alt="Labeled motor mount for SMP gripper"><figcaption>Labeled holder: base, cap, piston, motor, spool, and nylon string routing define the reset path.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/gripper/motor-mount-open.jpg" alt="SMP gripper motor mount in open state"><figcaption>Open state: the fingers are pulled outward by nylon strings routed through the holder and wound by a motor-driven spool.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/gripper/motor-mount-closed.jpg" alt="SMP gripper motor mount in closed state"><figcaption>Closed state: the softened gripper can snap closed from contact force, then cool below glass transition to hold without continuous power.</figcaption></figure>
+      </div>
+      <div class="grid-3 section">
+        <div class="panel"><h3>Five-part mount</h3><p>The frame, piston, cap, spool, and motor hold the gripper while still allowing the palm to translate during snap-through.</p></div>
+        <div class="panel"><h3>String routing</h3><p>Four nylon strings pass through the fingers about 1 cm from the tips, are secured with washers on the pre-stretched Ecoflex side, then route through finger and base holes to the spool.</p></div>
+        <div class="panel"><h3>Design constraint</h3><p>The string holes had to avoid breaking the embedded copper heater, so the mount is part of the electromechanical design rather than a cosmetic holder.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>Temperature-dependent force testing</h2><p>Force tests show the gripper as a measured mechanism, not just a prototype photo. Holding force was tested from 70 to 35 deg C with a 25 mm sphere; gripping force was tested against a vertical cylinder from 70 to 40 deg C. The transition around 40-50 deg C separates the soft grasping regime from the rigid holding regime.</p></div>
+      <div class="grid-3">
+        <figure class="media-contain"><img src="assets/papers/gripper/heat.PNG" alt="Flexible Pyralux heater pattern for SMP gripper"><figcaption>Flexible Pyralux heater pattern: the etched serpentine copper trace distributes Joule heating through the SMP palm and fingers.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/gripper/holdingforcenew.PNG" alt="Holding force result"><figcaption>Holding force increases sharply below glass transition; the rigid gripper reached 3.93 N, equivalent to 400.74 g or a 59:1 holding-force-to-weight ratio.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/gripper/grippingforcenew.PNG" alt="Gripping force result"><figcaption>Gripping force follows the opposite trend: the rings press more effectively when the fingers are soft enough to conform around the cylinder.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/gripper/closingforcenew.PNG" alt="Closing force result"><figcaption>Closing force test: the open gripper snaps closed with slightly less than 0.5 N applied at the palm center.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/gripper/catching-test.gif" alt="Animated catching experiment"><figcaption>Catching experiment: five-frame sequence of a 40 g mass dropped into the heated bistable gripper.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/gripper/HeavyLift.jpg" alt="Heavy lift gripper demonstration"><figcaption>Heavy-lift demonstration: the 6.8 g gripper holds a 453 g object after cooling into the rigid state.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section grid-2">
+      <figure class="media-fill"><img src="assets/supporting/GripperHoldingGlue.png" alt="SMP gripper holding object"><figcaption>Hardware prototype demonstrating useful holding behavior.</figcaption></figure>
+      <div class="panel">
+        <h3>What this demonstrates</h3>
+        <p>The mechanism is testable and understandable: embedded heater integration, tuned elastic energy minima, passive bistable triggering, and force-based validation.</p>
+        <p>The same design theme appears in later hand work: compliance and variable stiffness are used to change contact behavior, then paired with controlled actuation and measured tests.</p>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>

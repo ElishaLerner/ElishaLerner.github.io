@@ -1,0 +1,2004 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OriHand Feetech HLS Python Controller | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Source Code</p><h1>OriHand Feetech HLS Python Controller</h1><p>Python source for the Feetech HLS controller used to scan servos, command current-limited motion, read telemetry, assign IDs, and run repeatable hand test sequences.</p><div class="actions"><a class="button primary" href="assets/code/orihand-feetech-hls-controller.py">Open raw file</a><a class="button" href="software.html">Back to software</a></div></div></section>
+  <main class="shell">
+    <section class="section">
+      <pre class="code-view"><code class="language-python">#!/usr/bin/env python3
+&quot;&quot;&quot;
+Standalone Feetech HLS controller.
+
+This single file combines:
+- serial bus communication
+- a desktop GUI for daily use
+- CLI commands for troubleshooting
+
+Typical use:
+    python feetech_hls_controller.py
+
+CLI examples:
+    python feetech_hls_controller.py ports
+    python feetech_hls_controller.py --port COM7 scan --start 0 --end 10
+    python feetech_hls_controller.py --port COM7 read --id 1
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import re
+import sys
+import time
+import tkinter as tk
+from pathlib import Path
+from tkinter import messagebox, ttk
+from typing import Iterable, Optional
+
+try:
+    import serial
+    import serial.tools.list_ports
+except ImportError as exc:  # pragma: no cover - runtime dependency
+    raise SystemExit(
+        &quot;This script needs pyserial. Install it with: pip install pyserial&quot;
+    ) from exc
+
+
+HEADER = b&quot;\xFF\xFF&quot;
+
+
+class Inst:
+    PING = 0x01
+    READ = 0x02
+    WRITE = 0x03
+    REG_WRITE = 0x04
+    ACTION = 0x05
+    RESET = 0x06
+
+
+class HLSReg:
+    ID = 5
+    MODE = 33
+    TORQUE_ENABLE = 40
+    ACC = 41
+    GOAL_TORQUE_L = 44
+    PRESENT_POSITION_L = 56
+    PRESENT_SPEED_L = 58
+    PRESENT_LOAD_L = 60
+    PRESENT_VOLTAGE = 62
+    PRESENT_TEMPERATURE = 63
+    MOVING = 66
+    PRESENT_CURRENT_L = 69
+
+
+class HLSMode:
+    SERVO = 0
+    SPEED = 1
+    CURRENT = 2
+
+
+DEFAULT_BAUDS = (&quot;1000000&quot;, &quot;115200&quot;)
+DEFAULT_SCAN_END = &quot;10&quot;
+DEFAULT_POSITION_SPEED_RPM = &quot;30&quot;
+DEFAULT_CONTINUOUS_SPEED_RPM = &quot;15&quot;
+DEFAULT_ACCEL_DEG_S2 = &quot;90&quot;
+DEFAULT_CURRENT_LIMIT_A = &quot;0.45&quot;
+DEFAULT_CURRENT_RAW = &quot;20&quot;
+DEFAULT_JOG_STEP_DEG = &quot;10&quot;
+DEFAULT_ALL_FINGERS_TARGET_DEG = &quot;180.0&quot;
+
+SOFT_HOME_SPEED_RPM = 8.0
+SOFT_HOME_ACCEL_DEG_S2 = 30.0
+SOFT_HOME_CURRENT_LIMIT_A = 0.25
+
+SERVO_MIN_POS = 0
+SERVO_MAX_POS = 4095
+SERVO_MIN_DEG = 0.0
+SERVO_MAX_DEG = 195.0
+
+RAW_POSITION_TO_DEG = 360.0 / 4096.0
+RAW_SPEED_TO_RPM = 0.732
+RAW_ACCEL_TO_DEG_S2 = 8.7
+MAX_RAW_SPEED = 136
+MAX_RAW_ACCEL = 255
+MAX_RAW_CURRENT_LIMIT = 1000
+MAX_MOTOR_CURRENT_A = 1.5
+FINGER_NAME_BY_ID = {
+    1: &quot;Thumb&quot;,
+    2: &quot;Index&quot;,
+    3: &quot;Middle&quot;,
+}
+SEQUENCE_STORAGE_DIR = Path(__file__).resolve().parent / &quot;SavedSequences&quot;
+
+
+@dataclasses.dataclass
+class StatusPacket:
+    servo_id: int
+    error: int
+    params: bytes
+
+
+@dataclasses.dataclass
+class Feedback:
+    position: int
+    speed: int
+    load: int
+    voltage_v: float
+    temperature_c: int
+    moving: bool
+    current_raw: int
+
+
+@dataclasses.dataclass
+class ServoPanelState:
+    servo_id: int
+    frame: ttk.LabelFrame
+    position_entry: ttk.Entry
+    advanced_frame: ttk.LabelFrame
+    advanced_toggle_var: tk.StringVar
+    live_position_var: tk.StringVar
+    position_var: tk.StringVar
+    jog_step_var: tk.StringVar
+    position_speed_rpm_var: tk.StringVar
+    continuous_speed_rpm_var: tk.StringVar
+    accel_deg_s2_var: tk.StringVar
+    current_limit_a_var: tk.StringVar
+    current_var: tk.StringVar
+    move_speed_guide_var: tk.StringVar
+    accel_guide_var: tk.StringVar
+    current_limit_guide_var: tk.StringVar
+    continuous_speed_guide_var: tk.StringVar
+    feedback_var: tk.StringVar
+    last_control_mode: str
+
+
+def checksum(payload: Iterable[int]) -&gt; int:
+    return (~(sum(payload) &amp; 0xFF)) &amp; 0xFF
+
+
+def le_u16(value: int) -&gt; bytes:
+    return bytes((value &amp; 0xFF, (value &gt;&gt; 8) &amp; 0xFF))
+
+
+def encode_signed_15(value: int) -&gt; int:
+    if value &lt; 0:
+        return ((-value) &amp; 0x7FFF) | 0x8000
+    return value &amp; 0x7FFF
+
+
+def decode_signed_15(value: int) -&gt; int:
+    if value &amp; 0x8000:
+        return -(value &amp; 0x7FFF)
+    return value
+
+
+def decode_signed_10(value: int) -&gt; int:
+    if value &amp; (1 &lt;&lt; 10):
+        return -(value &amp; ~(1 &lt;&lt; 10))
+    return value
+
+
+def u16_from(buf: bytes, offset: int) -&gt; int:
+    return buf[offset] | (buf[offset + 1] &lt;&lt; 8)
+
+
+def list_ports(return_devices_only: bool = False) -&gt; list[str] | None:
+    ports = list(serial.tools.list_ports.comports())
+    if not ports:
+        if return_devices_only:
+            return []
+        print(&quot;No serial ports found.&quot;)
+        return None
+    if return_devices_only:
+        return [port.device for port in ports]
+    for port in ports:
+        print(f&quot;{port.device:12s} {port.description}&quot;)
+    return None
+
+
+def finger_name_for_id(servo_id: int) -&gt; str:
+    return FINGER_NAME_BY_ID.get(servo_id, f&quot;Finger {servo_id}&quot;)
+
+
+def finger_label_for_id(servo_id: int) -&gt; str:
+    return f&quot;{finger_name_for_id(servo_id)} (ID {servo_id})&quot;
+
+
+def sanitize_sequence_name(name: str) -&gt; str:
+    cleaned = re.sub(r&quot;[^A-Za-z0-9 _-]+&quot;, &quot;&quot;, name).strip()
+    cleaned = cleaned.replace(&quot; &quot;, &quot;_&quot;)
+    return cleaned or &quot;sequence&quot;
+
+
+class FeetechBus:
+    def __init__(self, port: str, baudrate: int = 1_000_000, timeout: float = 0.1):
+        self.ser = serial.Serial(port=port, baudrate=baudrate, timeout=timeout)
+        self.timeout = timeout
+
+    def close(self) -&gt; None:
+        self.ser.close()
+
+    def __enter__(self) -&gt; &quot;FeetechBus&quot;:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -&gt; None:
+        self.close()
+
+    def _build_packet(self, servo_id: int, instruction: int, params: bytes = b&quot;&quot;) -&gt; bytes:
+        length = len(params) + 2
+        body = bytes((servo_id, length, instruction)) + params
+        return HEADER + body + bytes((checksum(body),))
+
+    def _read_status(self, expected_id: Optional[int]) -&gt; StatusPacket:
+        deadline = time.monotonic() + self.timeout
+        buf = bytearray()
+
+        while time.monotonic() &lt; deadline:
+            chunk = self.ser.read(1)
+            if not chunk:
+                continue
+            buf.extend(chunk)
+
+            while len(buf) &gt;= 4:
+                header_index = buf.find(HEADER)
+                if header_index &lt; 0:
+                    buf.clear()
+                    break
+                if header_index &gt; 0:
+                    del buf[:header_index]
+                if len(buf) &lt; 4:
+                    break
+
+                servo_id = buf[2]
+                length = buf[3]
+                packet_len = length + 4
+                if len(buf) &lt; packet_len:
+                    break
+
+                packet = bytes(buf[:packet_len])
+                del buf[:packet_len]
+
+                payload = packet[2:-1]
+                received_checksum = packet[-1]
+                if checksum(payload) != received_checksum:
+                    continue
+
+                if expected_id is not None and servo_id != expected_id:
+                    continue
+
+                return StatusPacket(servo_id=servo_id, error=packet[4], params=packet[5:-1])
+
+        raise TimeoutError(&quot;Timed out waiting for servo response&quot;)
+
+    def transact(
+        self,
+        servo_id: int,
+        instruction: int,
+        params: bytes = b&quot;&quot;,
+        expect_reply: bool = True,
+    ) -&gt; Optional[StatusPacket]:
+        self.ser.reset_input_buffer()
+        self.ser.write(self._build_packet(servo_id, instruction, params))
+        self.ser.flush()
+        if not expect_reply or servo_id == 0xFE:
+            return None
+        return self._read_status(expected_id=servo_id)
+
+    def ping(self, servo_id: int) -&gt; bool:
+        self.transact(servo_id, Inst.PING)
+        return True
+
+    def read(self, servo_id: int, address: int, size: int) -&gt; bytes:
+        status = self.transact(servo_id, Inst.READ, bytes((address, size)))
+        if status is None:
+            raise RuntimeError(&quot;READ unexpectedly returned no status packet&quot;)
+        if status.error:
+            raise RuntimeError(f&quot;Servo {servo_id} returned error code 0x{status.error:02X}&quot;)
+        if len(status.params) != size:
+            raise RuntimeError(
+                f&quot;Expected {size} data bytes from servo {servo_id}, got {len(status.params)}&quot;
+            )
+        return status.params
+
+    def write(self, servo_id: int, address: int, data: bytes, reg_write: bool = False) -&gt; None:
+        instruction = Inst.REG_WRITE if reg_write else Inst.WRITE
+        status = self.transact(servo_id, instruction, bytes((address,)) + data)
+        if status is not None and status.error:
+            raise RuntimeError(f&quot;Servo {servo_id} returned error code 0x{status.error:02X}&quot;)
+
+    def write_byte(self, servo_id: int, address: int, value: int) -&gt; None:
+        self.write(servo_id, address, bytes((value &amp; 0xFF,)))
+
+    def write_word(self, servo_id: int, address: int, value: int) -&gt; None:
+        self.write(servo_id, address, le_u16(value))
+
+    def action(self) -&gt; None:
+        self.transact(0xFE, Inst.ACTION, expect_reply=False)
+
+    def set_mode(self, servo_id: int, mode: int) -&gt; None:
+        self.write_byte(servo_id, HLSReg.MODE, mode)
+
+    def set_id(self, servo_id: int, new_id: int) -&gt; None:
+        self.write_byte(servo_id, HLSReg.ID, new_id)
+
+    def enable_torque(self, servo_id: int, enabled: bool) -&gt; None:
+        self.write_byte(servo_id, HLSReg.TORQUE_ENABLE, 1 if enabled else 0)
+
+    def set_position(
+        self,
+        servo_id: int,
+        position: int,
+        speed: int = 0,
+        acc: int = 0,
+        torque_limit_raw: int = 500,
+        reg_write: bool = False,
+    ) -&gt; None:
+        payload = bytes((acc &amp; 0xFF,)) + le_u16(encode_signed_15(position))
+        payload += le_u16(torque_limit_raw &amp; 0xFFFF)
+        payload += le_u16(speed &amp; 0xFFFF)
+        self.write(servo_id, HLSReg.ACC, payload, reg_write=reg_write)
+
+    def set_speed(
+        self,
+        servo_id: int,
+        speed: int,
+        acc: int = 0,
+        torque_limit_raw: int = 500,
+    ) -&gt; None:
+        payload = bytes((acc &amp; 0xFF,)) + le_u16(0)
+        payload += le_u16(torque_limit_raw &amp; 0xFFFF)
+        payload += le_u16(encode_signed_15(speed))
+        self.write(servo_id, HLSReg.ACC, payload)
+
+    def set_current_raw(self, servo_id: int, target_current_raw: int) -&gt; None:
+        self.write_word(servo_id, HLSReg.GOAL_TORQUE_L, encode_signed_15(target_current_raw))
+
+    def read_feedback(self, servo_id: int) -&gt; Feedback:
+        raw = self.read(servo_id, HLSReg.PRESENT_POSITION_L, 15)
+        return Feedback(
+            position=decode_signed_15(u16_from(raw, 0)),
+            speed=decode_signed_15(u16_from(raw, 2)),
+            load=decode_signed_10(u16_from(raw, 4)),
+            voltage_v=raw[6] / 10.0,
+            temperature_c=raw[7],
+            moving=bool(raw[10]),
+            current_raw=decode_signed_15(u16_from(raw, 13)),
+        )
+
+    def scan(self, start_id: int = 0, end_id: int = 20) -&gt; list[int]:
+        found: list[int] = []
+        for servo_id in range(start_id, end_id + 1):
+            try:
+                self.ping(servo_id)
+            except TimeoutError:
+                continue
+            found.append(servo_id)
+        return found
+
+
+class ServoControlApp:
+    def __init__(self, root: tk.Tk) -&gt; None:
+        self.root = root
+        self.root.title(&quot;Feetech HLS Controller&quot;)
+        self.root.geometry(&quot;1180x760&quot;)
+
+        self.bus: FeetechBus | None = None
+        self.port_var = tk.StringVar()
+        self.baud_var = tk.StringVar(value=DEFAULT_BAUDS[0])
+        self.scan_start_var = tk.StringVar(value=&quot;0&quot;)
+        self.scan_end_var = tk.StringVar(value=DEFAULT_SCAN_END)
+        self.status_var = tk.StringVar(value=&quot;Disconnected&quot;)
+        self.auto_refresh_var = tk.BooleanVar(value=True)
+        self.refresh_ms_var = tk.StringVar(value=&quot;500&quot;)
+        self.all_target_deg_var = tk.StringVar(value=DEFAULT_ALL_FINGERS_TARGET_DEG)
+        self.all_jog_step_deg_var = tk.StringVar(value=DEFAULT_JOG_STEP_DEG)
+        self.all_move_speed_rpm_var = tk.StringVar(value=DEFAULT_POSITION_SPEED_RPM)
+        self.all_accel_deg_s2_var = tk.StringVar(value=DEFAULT_ACCEL_DEG_S2)
+        self.all_current_limit_a_var = tk.StringVar(value=DEFAULT_CURRENT_LIMIT_A)
+        self.all_guide_var = tk.StringVar(
+            value=&quot;Hand-safe range: 0 to 195 deg. Home = 180 deg. Close = 0 deg.&quot;
+        )
+        self.motion_planner_toggle_var = tk.StringVar(value=&quot;Show Sequence Planner&quot;)
+        self.motion_plan_bend_limit_deg_var = tk.StringVar(value=&quot;20.0&quot;)
+        self.motion_plan_status_var = tk.StringVar(
+            value=&quot;Sequence planner supports wait, home, and go-to steps. Commands are clamped to the bend limit and hand-safe range.&quot;
+        )
+        self.motion_plan_state: dict | None = None
+        self.motion_plan_after_id: str | None = None
+        self.motion_planner_frame: ttk.LabelFrame | None = None
+        self.motion_plan_text: tk.Text | None = None
+        self.sequence_name_var = tk.StringVar(value=&quot;grasp_sequence&quot;)
+        self.sequence_saved_var = tk.StringVar(
+            value=f&quot;Saved sequences folder: {SEQUENCE_STORAGE_DIR}&quot;
+        )
+        self.sequence_selector: ttk.Combobox | None = None
+        self.single_id_current_var = tk.StringVar(value=&quot;-&quot;)
+        self.single_id_new_var = tk.StringVar(value=&quot;2&quot;)
+
+        self.servo_panels: dict[int, ServoPanelState] = {}
+
+        self.ensure_sequence_storage_dir()
+        self._build_ui()
+        self.refresh_ports()
+        self._schedule_refresh()
+
+    def _build_ui(self) -&gt; None:
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=1)
+
+        top = ttk.Frame(self.root, padding=10)
+        top.grid(row=0, column=0, sticky=&quot;ew&quot;)
+        top.columnconfigure(8, weight=1)
+
+        ttk.Label(top, text=&quot;Port&quot;).grid(row=0, column=0, sticky=&quot;w&quot;)
+        self.port_combo = ttk.Combobox(top, textvariable=self.port_var, width=20, state=&quot;readonly&quot;)
+        self.port_combo.grid(row=1, column=0, sticky=&quot;ew&quot;, padx=(0, 8))
+
+        ttk.Button(top, text=&quot;Refresh Ports&quot;, command=self.refresh_ports).grid(
+            row=1, column=1, sticky=&quot;ew&quot;, padx=(0, 12)
+        )
+
+        ttk.Label(top, text=&quot;Baud&quot;).grid(row=0, column=2, sticky=&quot;w&quot;)
+        self.baud_combo = ttk.Combobox(
+            top, textvariable=self.baud_var, values=DEFAULT_BAUDS, width=12, state=&quot;readonly&quot;
+        )
+        self.baud_combo.grid(row=1, column=2, sticky=&quot;ew&quot;, padx=(0, 12))
+
+        ttk.Button(top, text=&quot;Connect&quot;, command=self.connect).grid(row=1, column=3, sticky=&quot;ew&quot;, padx=(0, 6))
+        ttk.Button(top, text=&quot;Disconnect&quot;, command=self.disconnect).grid(row=1, column=4, sticky=&quot;ew&quot;, padx=(0, 12))
+
+        ttk.Label(top, text=&quot;Scan IDs&quot;).grid(row=0, column=5, sticky=&quot;w&quot;)
+        scan_frame = ttk.Frame(top)
+        scan_frame.grid(row=1, column=5, sticky=&quot;w&quot;, padx=(0, 12))
+        ttk.Entry(scan_frame, textvariable=self.scan_start_var, width=5).grid(row=0, column=0)
+        ttk.Label(scan_frame, text=&quot;to&quot;).grid(row=0, column=1, padx=4)
+        ttk.Entry(scan_frame, textvariable=self.scan_end_var, width=5).grid(row=0, column=2)
+
+        ttk.Button(top, text=&quot;Scan&quot;, command=self.scan).grid(row=1, column=6, sticky=&quot;ew&quot;, padx=(0, 12))
+        ttk.Checkbutton(top, text=&quot;Auto Refresh&quot;, variable=self.auto_refresh_var).grid(
+            row=1, column=7, sticky=&quot;w&quot;
+        )
+
+        refresh_frame = ttk.Frame(top)
+        refresh_frame.grid(row=1, column=8, sticky=&quot;e&quot;)
+        ttk.Label(refresh_frame, text=&quot;Refresh ms&quot;).grid(row=0, column=0, padx=(0, 6))
+        ttk.Entry(refresh_frame, textvariable=self.refresh_ms_var, width=6).grid(row=0, column=1)
+
+        ttk.Label(self.root, textvariable=self.status_var, padding=(10, 0, 10, 10)).grid(
+            row=2, column=0, sticky=&quot;ew&quot;
+        )
+
+        canvas_frame = ttk.Frame(self.root, padding=(10, 0, 10, 10))
+        canvas_frame.grid(row=1, column=0, sticky=&quot;nsew&quot;)
+        canvas_frame.columnconfigure(0, weight=1)
+        canvas_frame.rowconfigure(0, weight=1)
+
+        self.canvas = tk.Canvas(canvas_frame, highlightthickness=0)
+        self.canvas.grid(row=0, column=0, sticky=&quot;nsew&quot;)
+
+        scrollbar = ttk.Scrollbar(canvas_frame, orient=&quot;vertical&quot;, command=self.canvas.yview)
+        scrollbar.grid(row=0, column=1, sticky=&quot;ns&quot;)
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.panels_container = ttk.Frame(self.canvas)
+        self.panels_container.columnconfigure(0, weight=1)
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.panels_container, anchor=&quot;nw&quot;)
+        self._build_all_fingers_panel()
+
+        self.panels_container.bind(&quot;&lt;Configure&gt;&quot;, self._on_container_configure)
+        self.canvas.bind(&quot;&lt;Configure&gt;&quot;, self._on_canvas_configure)
+
+    def ensure_sequence_storage_dir(self) -&gt; None:
+        SEQUENCE_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+    def sequence_file_path(self, name: str) -&gt; Path:
+        safe_name = sanitize_sequence_name(name)
+        return SEQUENCE_STORAGE_DIR / f&quot;{safe_name}.txt&quot;
+
+    def refresh_saved_sequences(self) -&gt; None:
+        self.ensure_sequence_storage_dir()
+        names = sorted(path.stem for path in SEQUENCE_STORAGE_DIR.glob(&quot;*.txt&quot;))
+        if self.sequence_selector is not None:
+            self.sequence_selector[&quot;values&quot;] = names
+        if names and self.sequence_name_var.get().strip() not in names:
+            self.sequence_name_var.set(names[0])
+        self.sequence_saved_var.set(f&quot;Saved sequences: {len(names)}&quot;)
+
+    def save_current_sequence(self) -&gt; None:
+        if self.motion_plan_text is None:
+            return
+
+        name = self.sequence_name_var.get().strip()
+        safe_name = sanitize_sequence_name(name)
+        path = self.sequence_file_path(name)
+        script = self.motion_plan_text.get(&quot;1.0&quot;, tk.END).rstrip() + &quot;\n&quot;
+
+        try:
+            self.ensure_sequence_storage_dir()
+            path.write_text(script, encoding=&quot;utf-8&quot;)
+        except Exception as exc:
+            messagebox.showerror(&quot;Save Failed&quot;, str(exc))
+            self.sequence_saved_var.set(&quot;Save failed.&quot;)
+            return
+
+        self.sequence_name_var.set(safe_name)
+        self.sequence_saved_var.set(f&quot;Saved: {path.name}&quot;)
+        self.refresh_saved_sequences()
+
+    def load_saved_sequence(self) -&gt; None:
+        if self.motion_plan_text is None:
+            return
+
+        name = self.sequence_name_var.get().strip()
+        if not name:
+            messagebox.showwarning(&quot;No Sequence Name&quot;, &quot;Choose or enter a saved sequence name first.&quot;)
+            return
+
+        path = self.sequence_file_path(name)
+        if not path.exists():
+            messagebox.showwarning(&quot;Missing Sequence&quot;, f&quot;No saved sequence named &#39;{sanitize_sequence_name(name)}&#39; was found.&quot;)
+            self.sequence_saved_var.set(&quot;Selected sequence was not found.&quot;)
+            return
+
+        try:
+            script = path.read_text(encoding=&quot;utf-8&quot;)
+        except Exception as exc:
+            messagebox.showerror(&quot;Load Failed&quot;, str(exc))
+            self.sequence_saved_var.set(&quot;Load failed.&quot;)
+            return
+
+        self.motion_plan_text.delete(&quot;1.0&quot;, tk.END)
+        self.motion_plan_text.insert(&quot;1.0&quot;, script)
+        self.sequence_name_var.set(path.stem)
+        self.sequence_saved_var.set(f&quot;Loaded: {path.name}&quot;)
+        self.motion_plan_text.focus_set()
+
+    def _build_all_fingers_panel(self) -&gt; None:
+        frame = ttk.LabelFrame(self.panels_container, text=&quot;All Fingers&quot;, padding=10)
+        frame.grid(row=0, column=0, sticky=&quot;ew&quot;, pady=(0, 12))
+        for col in range(8):
+            frame.columnconfigure(col, weight=1 if col in (1, 3, 5, 7) else 0)
+
+        ttk.Label(frame, text=&quot;Target (deg)&quot;).grid(row=0, column=0, sticky=&quot;w&quot;)
+        self.all_target_entry = ttk.Entry(frame, textvariable=self.all_target_deg_var, width=10)
+        self.all_target_entry.grid(row=0, column=1, sticky=&quot;ew&quot;, padx=(0, 10))
+        self.all_target_entry.bind(&quot;&lt;Return&gt;&quot;, lambda _event: self.move_all_fingers())
+        self.all_target_entry.bind(&quot;&lt;FocusIn&gt;&quot;, lambda _event: self.select_entry_text(self.all_target_entry))
+
+        ttk.Label(frame, text=&quot;Jog Step (deg)&quot;).grid(row=0, column=2, sticky=&quot;w&quot;)
+        ttk.Entry(frame, textvariable=self.all_jog_step_deg_var, width=10).grid(
+            row=0, column=3, sticky=&quot;ew&quot;, padx=(0, 10)
+        )
+
+        ttk.Label(frame, text=&quot;Move Speed (RPM)&quot;).grid(row=0, column=4, sticky=&quot;w&quot;)
+        ttk.Entry(frame, textvariable=self.all_move_speed_rpm_var, width=10).grid(
+            row=0, column=5, sticky=&quot;ew&quot;, padx=(0, 10)
+        )
+
+        ttk.Label(frame, text=&quot;Current Limit (A)&quot;).grid(row=0, column=6, sticky=&quot;w&quot;)
+        ttk.Entry(frame, textvariable=self.all_current_limit_a_var, width=10).grid(
+            row=0, column=7, sticky=&quot;ew&quot;
+        )
+
+        ttk.Label(frame, text=&quot;Accel (deg/s^2)&quot;).grid(row=1, column=0, sticky=&quot;w&quot;, pady=(8, 0))
+        ttk.Entry(frame, textvariable=self.all_accel_deg_s2_var, width=10).grid(
+            row=1, column=1, sticky=&quot;ew&quot;, padx=(0, 10), pady=(8, 0)
+        )
+        ttk.Label(frame, textvariable=self.all_guide_var).grid(
+            row=1, column=2, columnspan=6, sticky=&quot;w&quot;, pady=(8, 0)
+        )
+
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=2, column=0, columnspan=8, sticky=&quot;ew&quot;, pady=(10, 0))
+        for idx in range(8):
+            buttons.columnconfigure(idx, weight=1)
+
+        ttk.Button(buttons, text=&quot;Refresh All&quot;, command=self.refresh_all_feedback).grid(
+            row=0, column=0, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(buttons, text=&quot;Open (180 deg)&quot;, command=lambda: self.move_all_to_degrees(180.0)).grid(
+            row=0, column=1, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(buttons, text=&quot;Close (0 deg)&quot;, command=lambda: self.move_all_to_degrees(0.0)).grid(
+            row=0, column=2, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(buttons, text=&quot;Jog -&quot;, command=lambda: self.jog_all_fingers(-1)).grid(
+            row=0, column=3, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(buttons, text=&quot;Jog +&quot;, command=lambda: self.jog_all_fingers(1)).grid(
+            row=0, column=4, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(buttons, text=&quot;Move All&quot;, command=self.move_all_fingers).grid(
+            row=0, column=5, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(buttons, text=&quot;Torque On All&quot;, command=lambda: self.set_torque_all(True)).grid(
+            row=0, column=6, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(buttons, text=&quot;Torque Off All&quot;, command=lambda: self.set_torque_all(False)).grid(
+            row=0, column=7, sticky=&quot;ew&quot;
+        )
+
+        self.single_id_frame = ttk.LabelFrame(frame, text=&quot;Single Servo ID Setup&quot;, padding=10)
+        self.single_id_frame.grid(row=3, column=0, columnspan=8, sticky=&quot;ew&quot;, pady=(10, 0))
+        for col in range(6):
+            self.single_id_frame.columnconfigure(col, weight=1 if col in (1, 3, 5) else 0)
+
+        ttk.Label(self.single_id_frame, text=&quot;Current ID&quot;).grid(row=0, column=0, sticky=&quot;w&quot;)
+        ttk.Label(self.single_id_frame, textvariable=self.single_id_current_var).grid(
+            row=0, column=1, sticky=&quot;w&quot;, padx=(0, 10)
+        )
+        ttk.Label(self.single_id_frame, text=&quot;New ID&quot;).grid(row=0, column=2, sticky=&quot;w&quot;)
+        ttk.Entry(self.single_id_frame, textvariable=self.single_id_new_var, width=8).grid(
+            row=0, column=3, sticky=&quot;ew&quot;, padx=(0, 10)
+        )
+        ttk.Label(
+            self.single_id_frame,
+            text=&quot;Visible only when exactly one servo is discovered. Use this before daisy-chaining all three.&quot;,
+        ).grid(row=0, column=4, sticky=&quot;w&quot;, padx=(0, 10))
+        ttk.Button(self.single_id_frame, text=&quot;Set ID&quot;, command=self.set_single_servo_id).grid(
+            row=0, column=5, sticky=&quot;ew&quot;
+        )
+        self.single_id_frame.grid_remove()
+
+        planner_toggle_row = ttk.Frame(frame)
+        planner_toggle_row.grid(row=4, column=0, columnspan=8, sticky=&quot;ew&quot;, pady=(10, 0))
+        planner_toggle_row.columnconfigure(0, weight=1)
+        planner_toggle_row.columnconfigure(1, weight=0)
+        ttk.Label(
+            planner_toggle_row,
+            text=&quot;Sequence planner runs timed step-by-step hand motions with waits, targets, and current limits.&quot;,
+        ).grid(row=0, column=0, sticky=&quot;w&quot;)
+        ttk.Button(
+            planner_toggle_row,
+            textvariable=self.motion_planner_toggle_var,
+            command=self.toggle_motion_planner,
+        ).grid(row=0, column=1, sticky=&quot;e&quot;)
+
+        self.motion_planner_frame = ttk.LabelFrame(frame, text=&quot;Sequence Planner&quot;, padding=10)
+        self.motion_planner_frame.grid(row=5, column=0, columnspan=8, sticky=&quot;ew&quot;, pady=(10, 0))
+        self.motion_planner_frame.columnconfigure(0, weight=1)
+        self.motion_planner_frame.columnconfigure(1, weight=0)
+
+        settings_row = ttk.Frame(self.motion_planner_frame)
+        settings_row.grid(row=0, column=0, columnspan=2, sticky=&quot;ew&quot;)
+        for col in range(6):
+            settings_row.columnconfigure(col, weight=1 if col in (1, 3, 5) else 0)
+
+        ttk.Label(settings_row, text=&quot;Most Closed (deg)&quot;).grid(row=0, column=0, sticky=&quot;w&quot;)
+        ttk.Entry(settings_row, textvariable=self.motion_plan_bend_limit_deg_var, width=10).grid(
+            row=0, column=1, sticky=&quot;ew&quot;, padx=(0, 10)
+        )
+        ttk.Label(settings_row, text=&quot;Move Speed (RPM)&quot;).grid(row=0, column=2, sticky=&quot;w&quot;)
+        ttk.Entry(settings_row, textvariable=self.all_move_speed_rpm_var, width=10).grid(
+            row=0, column=3, sticky=&quot;ew&quot;, padx=(0, 10)
+        )
+        ttk.Label(settings_row, text=&quot;Accel (deg/s^2)&quot;).grid(row=0, column=4, sticky=&quot;w&quot;)
+        ttk.Entry(settings_row, textvariable=self.all_accel_deg_s2_var, width=10).grid(
+            row=0, column=5, sticky=&quot;ew&quot;
+        )
+
+        sequence_help = (
+            &quot;Available commands:\n&quot;
+            &quot;home\n&quot;
+            &quot;wait &lt;seconds&gt;\n&quot;
+            &quot;go to &lt;degrees&gt; with a current limit of &lt;amps&gt; A\n\n&quot;
+            &quot;Modifier structure:\n&quot;
+            &quot;&lt;finger target&gt;: &lt;command&gt;\n\n&quot;
+            &quot;Valid finger targets:\n&quot;
+            &quot;thumb, index, middle, all, hand, fingers, id &lt;number&gt;, finger &lt;number&gt;\n\n&quot;
+            &quot;Examples:\n&quot;
+            &quot;wait 1.5 seconds\n&quot;
+            &quot;go to 90 degrees with a current limit of 0.45 A\n&quot;
+            &quot;thumb: go to 120 degrees with a current limit of 0.35 A\n&quot;
+            &quot;index: home\n&quot;
+            &quot;middle: wait 0.5 seconds&quot;
+        )
+        ttk.Label(
+            self.motion_planner_frame,
+            text=sequence_help,
+            justify=&quot;left&quot;,
+        ).grid(row=1, column=0, columnspan=2, sticky=&quot;w&quot;, pady=(10, 0))
+
+        saved_row = ttk.Frame(self.motion_planner_frame)
+        saved_row.grid(row=2, column=0, columnspan=2, sticky=&quot;ew&quot;, pady=(10, 0))
+        for col in range(6):
+            saved_row.columnconfigure(col, weight=1 if col in (1, 3) else 0)
+
+        ttk.Label(saved_row, text=&quot;Sequence Name&quot;).grid(row=0, column=0, sticky=&quot;w&quot;)
+        self.sequence_selector = ttk.Combobox(saved_row, textvariable=self.sequence_name_var, width=26)
+        self.sequence_selector.grid(row=0, column=1, sticky=&quot;ew&quot;, padx=(0, 10))
+        ttk.Button(saved_row, text=&quot;Refresh Saved&quot;, command=self.refresh_saved_sequences).grid(
+            row=0, column=2, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(saved_row, text=&quot;Load Saved&quot;, command=self.load_saved_sequence).grid(
+            row=0, column=3, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(saved_row, text=&quot;Save Current&quot;, command=self.save_current_sequence).grid(
+            row=0, column=4, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Label(saved_row, textvariable=self.sequence_saved_var).grid(
+            row=0, column=5, sticky=&quot;w&quot;
+        )
+
+        self.motion_plan_text = tk.Text(self.motion_planner_frame, height=9, wrap=&quot;word&quot;)
+        self.motion_plan_text.grid(row=3, column=0, sticky=&quot;nsew&quot;, pady=(10, 0))
+        self.motion_plan_text.insert(
+            &quot;1.0&quot;,
+            &quot;# Sequence examples\n&quot;
+            &quot;wait 1.5 seconds\n&quot;
+            &quot;go to 90 degrees with a current limit of 0.45 A\n&quot;
+            &quot;go to 60 degrees with a current limit of 0.70 A\n&quot;
+            &quot;wait 5 seconds\n&quot;
+            &quot;home\n\n&quot;
+            &quot;# Optional finger-specific steps\n&quot;
+            &quot;thumb: go to 120 degrees with a current limit of 0.35 A\n&quot;
+            &quot;index: home\n&quot;
+            &quot;middle: wait 0.5 seconds\n&quot;,
+        )
+        planner_scroll = ttk.Scrollbar(self.motion_planner_frame, orient=&quot;vertical&quot;, command=self.motion_plan_text.yview)
+        planner_scroll.grid(row=3, column=1, sticky=&quot;ns&quot;, pady=(10, 0))
+        self.motion_plan_text.configure(yscrollcommand=planner_scroll.set)
+
+        ttk.Label(self.motion_planner_frame, textvariable=self.motion_plan_status_var).grid(
+            row=4, column=0, columnspan=2, sticky=&quot;w&quot;, pady=(10, 0)
+        )
+
+        planner_buttons = ttk.Frame(self.motion_planner_frame)
+        planner_buttons.grid(row=5, column=0, columnspan=2, sticky=&quot;ew&quot;, pady=(10, 0))
+        for idx in range(4):
+            planner_buttons.columnconfigure(idx, weight=1)
+
+        ttk.Button(planner_buttons, text=&quot;Run Sequence&quot;, command=self.start_motion_plan).grid(
+            row=0, column=0, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(planner_buttons, text=&quot;Stop Sequence&quot;, command=self.stop_motion_plan).grid(
+            row=0, column=1, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(planner_buttons, text=&quot;Load Example&quot;, command=self.load_sequence_example).grid(
+            row=0, column=2, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(planner_buttons, text=&quot;Insert All Target Step&quot;, command=self.copy_all_target_to_planner).grid(
+            row=0, column=3, sticky=&quot;ew&quot;
+        )
+        self.motion_planner_frame.grid_remove()
+        self.refresh_saved_sequences()
+
+    def _on_container_configure(self, _event: tk.Event) -&gt; None:
+        self.canvas.configure(scrollregion=self.canvas.bbox(&quot;all&quot;))
+
+    def _on_canvas_configure(self, event: tk.Event) -&gt; None:
+        self.canvas.itemconfigure(self.canvas_window, width=event.width)
+
+    def set_status(self, message: str) -&gt; None:
+        self.status_var.set(message)
+
+    def refresh_ports(self) -&gt; None:
+        ports = list_ports(return_devices_only=True)
+        self.port_combo[&quot;values&quot;] = ports
+        if ports and self.port_var.get() not in ports:
+            self.port_var.set(ports[0])
+        self.set_status(f&quot;Found {len(ports)} serial port(s).&quot;)
+
+    def connect(self) -&gt; None:
+        self.disconnect(silent=True)
+        port = self.port_var.get().strip()
+        if not port:
+            messagebox.showwarning(&quot;No Port&quot;, &quot;Pick a serial port first.&quot;)
+            return
+
+        try:
+            baud = int(self.baud_var.get())
+            self.bus = FeetechBus(port=port, baudrate=baud, timeout=0.1)
+        except Exception as exc:
+            self.bus = None
+            messagebox.showerror(&quot;Connect Failed&quot;, str(exc))
+            self.set_status(f&quot;Failed to connect to {port}.&quot;)
+            return
+
+        self.set_status(f&quot;Connected to {port} at {baud} bps.&quot;)
+
+    def disconnect(self, silent: bool = False) -&gt; None:
+        self.stop_motion_plan(silent=True)
+        if self.bus is not None:
+            self.bus.close()
+            self.bus = None
+        if not silent:
+            self.set_status(&quot;Disconnected.&quot;)
+
+    def require_bus(self) -&gt; FeetechBus | None:
+        if self.bus is None:
+            messagebox.showwarning(&quot;Not Connected&quot;, &quot;Connect to the URT-2 first.&quot;)
+            return None
+        return self.bus
+
+    def scan(self) -&gt; None:
+        bus = self.require_bus()
+        if bus is None:
+            return
+        self.stop_motion_plan(silent=True)
+
+        try:
+            start_id = int(self.scan_start_var.get())
+            end_id = int(self.scan_end_var.get())
+            found = bus.scan(start_id, end_id)
+        except Exception as exc:
+            messagebox.showerror(&quot;Scan Failed&quot;, str(exc))
+            self.set_status(&quot;Scan failed.&quot;)
+            return
+
+        self.sync_servo_panels(found)
+        self.update_single_id_controls()
+
+        if found:
+            self.set_status(f&quot;Found servos: {found}&quot;)
+            self.refresh_all_feedback()
+        else:
+            self.set_status(&quot;No servos found in scan range.&quot;)
+
+    def ensure_servo_panel(self, servo_id: int) -&gt; ServoPanelState:
+        existing = self.servo_panels.get(servo_id)
+        if existing is not None:
+            return existing
+
+        frame = ttk.LabelFrame(self.panels_container, text=finger_label_for_id(servo_id), padding=10)
+        row = len(self.servo_panels) + 1
+        frame.grid(row=row, column=0, sticky=&quot;ew&quot;, pady=(0, 10))
+        for col in range(8):
+            frame.columnconfigure(col, weight=1 if col in (1, 3, 5) else 0)
+
+        advanced_toggle_var = tk.StringVar(value=&quot;Show Advanced&quot;)
+        live_position_var = tk.StringVar(value=&quot;Unknown&quot;)
+        position_var = tk.StringVar(value=&quot;180.0&quot;)
+        jog_step_var = tk.StringVar(value=DEFAULT_JOG_STEP_DEG)
+        position_speed_rpm_var = tk.StringVar(value=DEFAULT_POSITION_SPEED_RPM)
+        continuous_speed_rpm_var = tk.StringVar(value=DEFAULT_CONTINUOUS_SPEED_RPM)
+        accel_deg_s2_var = tk.StringVar(value=DEFAULT_ACCEL_DEG_S2)
+        current_limit_a_var = tk.StringVar(value=DEFAULT_CURRENT_LIMIT_A)
+        current_var = tk.StringVar(value=DEFAULT_CURRENT_RAW)
+        move_speed_guide_var = tk.StringVar()
+        accel_guide_var = tk.StringVar()
+        current_limit_guide_var = tk.StringVar()
+        continuous_speed_guide_var = tk.StringVar()
+        feedback_var = tk.StringVar(value=&quot;No feedback yet.&quot;)
+
+        ttk.Label(frame, text=&quot;Live Position (deg)&quot;).grid(row=0, column=0, sticky=&quot;w&quot;)
+        ttk.Label(frame, textvariable=live_position_var).grid(row=0, column=1, sticky=&quot;w&quot;, padx=(0, 10))
+
+        ttk.Label(frame, text=&quot;Target Position (deg)&quot;).grid(row=0, column=2, sticky=&quot;w&quot;)
+        position_entry = ttk.Entry(frame, textvariable=position_var, width=10)
+        position_entry.grid(row=0, column=3, sticky=&quot;ew&quot;, padx=(0, 10))
+        position_entry.bind(&quot;&lt;Return&gt;&quot;, lambda _event, sid=servo_id: self.move_servo(sid))
+        position_entry.bind(&quot;&lt;FocusIn&gt;&quot;, lambda _event, entry=position_entry: self.select_entry_text(entry))
+
+        ttk.Label(frame, text=&quot;Jog Step (deg)&quot;).grid(row=0, column=4, sticky=&quot;w&quot;)
+        ttk.Entry(frame, textvariable=jog_step_var, width=10).grid(row=0, column=5, sticky=&quot;ew&quot;, padx=(0, 10))
+
+        ttk.Label(frame, text=&quot;Move Speed (RPM)&quot;).grid(row=0, column=6, sticky=&quot;w&quot;)
+        ttk.Entry(frame, textvariable=position_speed_rpm_var, width=10).grid(row=0, column=7, sticky=&quot;ew&quot;)
+
+        ttk.Label(frame, textvariable=move_speed_guide_var).grid(
+            row=1, column=6, columnspan=2, sticky=&quot;w&quot;, pady=(4, 0)
+        )
+
+        ttk.Label(frame, text=&quot;Accel (deg/s^2)&quot;).grid(row=2, column=0, sticky=&quot;w&quot;, pady=(8, 0))
+        ttk.Entry(frame, textvariable=accel_deg_s2_var, width=10).grid(
+            row=2, column=1, sticky=&quot;ew&quot;, padx=(0, 10), pady=(8, 0)
+        )
+        ttk.Label(frame, textvariable=accel_guide_var).grid(
+            row=2, column=2, columnspan=2, sticky=&quot;w&quot;, pady=(8, 0)
+        )
+
+        ttk.Label(frame, text=&quot;Current Limit (A)&quot;).grid(row=2, column=4, sticky=&quot;w&quot;, pady=(8, 0))
+        ttk.Entry(frame, textvariable=current_limit_a_var, width=10).grid(
+            row=2, column=5, sticky=&quot;ew&quot;, padx=(0, 10), pady=(8, 0)
+        )
+        ttk.Label(frame, textvariable=current_limit_guide_var).grid(
+            row=2, column=6, columnspan=2, sticky=&quot;w&quot;, pady=(8, 0)
+        )
+
+        pos_buttons = ttk.Frame(frame)
+        pos_buttons.grid(row=3, column=0, columnspan=8, sticky=&quot;ew&quot;, pady=(10, 0))
+        for idx in range(8):
+            pos_buttons.columnconfigure(idx, weight=1)
+
+        ttk.Button(pos_buttons, text=&quot;Refresh&quot;, command=lambda sid=servo_id: self.refresh_feedback(sid)).grid(
+            row=0, column=0, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(pos_buttons, text=&quot;Use Live Pos&quot;, command=lambda sid=servo_id: self.sync_target_to_live(sid)).grid(
+            row=0, column=1, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(pos_buttons, text=&quot;Home (180 deg)&quot;, command=lambda sid=servo_id: self.move_to_degrees(sid, 180.0)).grid(
+            row=0, column=2, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(pos_buttons, text=&quot;Jog -&quot;, command=lambda sid=servo_id: self.jog_servo(sid, -1)).grid(
+            row=0, column=3, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(pos_buttons, text=&quot;Jog +&quot;, command=lambda sid=servo_id: self.jog_servo(sid, 1)).grid(
+            row=0, column=4, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(pos_buttons, text=&quot;Move To Target&quot;, command=lambda sid=servo_id: self.move_servo(sid)).grid(
+            row=0, column=5, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(pos_buttons, text=&quot;Torque On&quot;, command=lambda sid=servo_id: self.set_torque(sid, True)).grid(
+            row=0, column=6, sticky=&quot;ew&quot;, padx=(0, 6)
+        )
+        ttk.Button(pos_buttons, text=&quot;Torque Off&quot;, command=lambda sid=servo_id: self.set_torque(sid, False)).grid(
+            row=0, column=7, sticky=&quot;ew&quot;
+        )
+
+        helper_row = ttk.Frame(frame)
+        helper_row.grid(row=4, column=0, columnspan=8, sticky=&quot;ew&quot;, pady=(8, 0))
+        helper_row.columnconfigure(0, weight=1)
+        helper_row.columnconfigure(1, weight=0)
+        ttk.Label(helper_row, text=&quot;Tip: type a target angle and press Enter to move immediately.&quot;).grid(
+            row=0, column=0, sticky=&quot;w&quot;
+        )
+        ttk.Button(
+            helper_row,
+            textvariable=advanced_toggle_var,
+            command=lambda sid=servo_id: self.toggle_advanced(sid),
+        ).grid(row=0, column=1, sticky=&quot;e&quot;)
+
+        advanced = ttk.LabelFrame(frame, text=&quot;Advanced Continuous Modes&quot;, padding=10)
+        advanced.grid(row=5, column=0, columnspan=8, sticky=&quot;ew&quot;, pady=(10, 0))
+        for col in range(8):
+            advanced.columnconfigure(col, weight=1 if col in (1, 3, 5, 7) else 0)
+
+        ttk.Label(advanced, text=&quot;Continuous Speed (RPM)&quot;).grid(row=0, column=0, sticky=&quot;w&quot;)
+        ttk.Entry(advanced, textvariable=continuous_speed_rpm_var, width=10).grid(
+            row=0, column=1, sticky=&quot;ew&quot;, padx=(0, 10)
+        )
+        ttk.Label(advanced, text=&quot;Current Raw&quot;).grid(row=0, column=2, sticky=&quot;w&quot;)
+        ttk.Entry(advanced, textvariable=current_var, width=10).grid(
+            row=0, column=3, sticky=&quot;ew&quot;, padx=(0, 10)
+        )
+        ttk.Label(advanced, textvariable=continuous_speed_guide_var).grid(
+            row=0, column=4, columnspan=2, sticky=&quot;w&quot;
+        )
+        ttk.Label(
+            advanced,
+            text=&quot;Current raw: start small, about 10-50 for bench testing.&quot;,
+        ).grid(row=0, column=6, columnspan=2, sticky=&quot;w&quot;)
+
+        ttk.Button(advanced, text=&quot;Run Reverse&quot;, command=lambda sid=servo_id: self.speed_servo(sid, -1)).grid(
+            row=1, column=0, columnspan=2, sticky=&quot;ew&quot;, pady=(8, 0), padx=(0, 6)
+        )
+        ttk.Button(advanced, text=&quot;Stop Speed&quot;, command=lambda sid=servo_id: self.stop_speed_servo(sid)).grid(
+            row=1, column=2, columnspan=2, sticky=&quot;ew&quot;, pady=(8, 0), padx=(0, 6)
+        )
+        ttk.Button(advanced, text=&quot;Run Forward&quot;, command=lambda sid=servo_id: self.speed_servo(sid, 1)).grid(
+            row=1, column=4, columnspan=2, sticky=&quot;ew&quot;, pady=(8, 0), padx=(0, 6)
+        )
+        ttk.Button(advanced, text=&quot;Send Current&quot;, command=lambda sid=servo_id: self.current_servo(sid)).grid(
+            row=1, column=6, columnspan=2, sticky=&quot;ew&quot;, pady=(8, 0)
+        )
+        advanced.grid_remove()
+
+        ttk.Label(frame, textvariable=feedback_var).grid(
+            row=6, column=0, columnspan=8, sticky=&quot;ew&quot;, pady=(10, 0)
+        )
+
+        state = ServoPanelState(
+            servo_id=servo_id,
+            frame=frame,
+            position_entry=position_entry,
+            advanced_frame=advanced,
+            advanced_toggle_var=advanced_toggle_var,
+            live_position_var=live_position_var,
+            position_var=position_var,
+            jog_step_var=jog_step_var,
+            position_speed_rpm_var=position_speed_rpm_var,
+            continuous_speed_rpm_var=continuous_speed_rpm_var,
+            accel_deg_s2_var=accel_deg_s2_var,
+            current_limit_a_var=current_limit_a_var,
+            current_var=current_var,
+            move_speed_guide_var=move_speed_guide_var,
+            accel_guide_var=accel_guide_var,
+            current_limit_guide_var=current_limit_guide_var,
+            continuous_speed_guide_var=continuous_speed_guide_var,
+            feedback_var=feedback_var,
+            last_control_mode=&quot;servo&quot;,
+        )
+        self.servo_panels[servo_id] = state
+
+        for var in (
+            position_speed_rpm_var,
+            continuous_speed_rpm_var,
+            accel_deg_s2_var,
+            current_limit_a_var,
+        ):
+            var.trace_add(&quot;write&quot;, lambda *_args, sid=servo_id: self.update_guides(sid))
+
+        self.update_guides(servo_id)
+        return state
+
+    def get_state(self, servo_id: int) -&gt; ServoPanelState:
+        return self.servo_panels[servo_id]
+
+    def select_entry_text(self, entry: ttk.Entry) -&gt; None:
+        entry.focus_set()
+        entry.selection_range(0, tk.END)
+        entry.icursor(tk.END)
+
+    def toggle_motion_planner(self) -&gt; None:
+        if self.motion_planner_frame is None:
+            return
+        if self.motion_planner_frame.winfo_viewable():
+            self.motion_planner_frame.grid_remove()
+            self.motion_planner_toggle_var.set(&quot;Show Sequence Planner&quot;)
+        else:
+            self.motion_planner_frame.grid()
+            self.motion_planner_toggle_var.set(&quot;Hide Sequence Planner&quot;)
+
+    def copy_all_target_to_planner(self) -&gt; None:
+        if self.motion_plan_text is None:
+            return
+        target = self.clamp_degrees(self.parse_float(self.all_target_deg_var.get(), &quot;All Fingers Target&quot;))
+        current_limit = self.parse_float(self.all_current_limit_a_var.get(), &quot;All Fingers Current Limit&quot;)
+        self.motion_plan_text.insert(
+            tk.INSERT,
+            f&quot;go to {target:.1f} degrees with a current limit of {current_limit:.2f} A\n&quot;,
+        )
+        self.motion_plan_text.focus_set()
+
+    def load_sequence_example(self) -&gt; None:
+        if self.motion_plan_text is None:
+            return
+        self.motion_plan_text.delete(&quot;1.0&quot;, tk.END)
+        self.motion_plan_text.insert(
+            &quot;1.0&quot;,
+            &quot;# Sequence examples\n&quot;
+            &quot;wait 1.5 seconds\n&quot;
+            &quot;go to 90 degrees with a current limit of 0.45 A\n&quot;
+            &quot;go to 60 degrees with a current limit of 0.70 A\n&quot;
+            &quot;wait 5 seconds\n&quot;
+            &quot;home\n\n&quot;
+            &quot;# Optional finger-specific steps\n&quot;
+            &quot;thumb: go to 120 degrees with a current limit of 0.35 A\n&quot;
+            &quot;index: home\n&quot;
+            &quot;middle: wait 0.5 seconds\n&quot;,
+        )
+        self.motion_plan_text.focus_set()
+
+    def parse_sequence_target(self, target_name: str | None, discovered_servo_ids: list[int]) -&gt; list[int]:
+        if target_name is None:
+            return discovered_servo_ids
+
+        normalized = target_name.strip().lower()
+        if normalized in {&quot;all&quot;, &quot;hand&quot;, &quot;fingers&quot;}:
+            return discovered_servo_ids
+
+        for servo_id in discovered_servo_ids:
+            if finger_name_for_id(servo_id).lower() == normalized:
+                return [servo_id]
+
+        id_match = re.fullmatch(r&quot;(?:id|finger)\s*(\d+)&quot;, normalized)
+        if id_match:
+            servo_id = int(id_match.group(1))
+            if servo_id in discovered_servo_ids:
+                return [servo_id]
+            raise ValueError(f&quot;Target &#39;{target_name}&#39; is not currently discovered on the bus.&quot;)
+
+        raise ValueError(f&quot;Unknown sequence target &#39;{target_name}&#39;. Use all, thumb, index, middle, or id N.&quot;)
+
+    def parse_sequence_script(self, script: str, discovered_servo_ids: list[int]) -&gt; list[dict]:
+        steps: list[dict] = []
+        for line_number, raw_line in enumerate(script.splitlines(), start=1):
+            line = raw_line.strip()
+            if not line or line.startswith(&quot;#&quot;):
+                continue
+
+            target_name: str | None = None
+            line_body = line
+            target_match = re.match(r&quot;^(thumb|index|middle|all|hand|fingers|id\s*\d+|finger\s*\d+)\s*:\s*(.+)$&quot;, line, re.IGNORECASE)
+            if target_match:
+                target_name = target_match.group(1)
+                line_body = target_match.group(2).strip()
+
+            wait_match = re.fullmatch(r&quot;wait\s+([0-9]*\.?[0-9]+)(?:\s*(?:s|sec|secs|second|seconds))?&quot;, line_body, re.IGNORECASE)
+            if wait_match:
+                steps.append({&quot;type&quot;: &quot;wait&quot;, &quot;duration_s&quot;: float(wait_match.group(1)), &quot;line_number&quot;: line_number})
+                continue
+
+            home_match = re.fullmatch(r&quot;home&quot;, line_body, re.IGNORECASE)
+            if home_match:
+                steps.append(
+                    {
+                        &quot;type&quot;: &quot;move&quot;,
+                        &quot;servo_ids&quot;: self.parse_sequence_target(target_name, discovered_servo_ids),
+                        &quot;target_deg&quot;: 180.0,
+                        &quot;current_limit_a&quot;: None,
+                        &quot;line_number&quot;: line_number,
+                    }
+                )
+                continue
+
+            move_match = re.fullmatch(
+                r&quot;go\s+to\s+(-?[0-9]*\.?[0-9]+)\s*degrees?(?:\s+with\s+a?\s*current\s+limit\s+of\s+([0-9]*\.?[0-9]+)\s*a?)?&quot;,
+                line_body,
+                re.IGNORECASE,
+            )
+            if move_match:
+                current_limit_text = move_match.group(2)
+                steps.append(
+                    {
+                        &quot;type&quot;: &quot;move&quot;,
+                        &quot;servo_ids&quot;: self.parse_sequence_target(target_name, discovered_servo_ids),
+                        &quot;target_deg&quot;: float(move_match.group(1)),
+                        &quot;current_limit_a&quot;: float(current_limit_text) if current_limit_text is not None else None,
+                        &quot;line_number&quot;: line_number,
+                    }
+                )
+                continue
+
+            raise ValueError(f&quot;Could not parse line {line_number}: {raw_line}&quot;)
+
+        if not steps:
+            raise ValueError(&quot;Sequence script is empty.&quot;)
+        return steps
+
+    def eased_alpha(self, alpha: float, easing: str) -&gt; float:
+        alpha = max(0.0, min(1.0, alpha))
+        if easing == &quot;Linear&quot;:
+            return alpha
+        return alpha * alpha * (3.0 - 2.0 * alpha)
+
+    def sync_servo_panels(self, found_ids: list[int]) -&gt; None:
+        found_set = set(found_ids)
+        for servo_id in list(self.servo_panels):
+            if servo_id not in found_set:
+                self.servo_panels[servo_id].frame.destroy()
+                del self.servo_panels[servo_id]
+
+        for servo_id in found_ids:
+            self.ensure_servo_panel(servo_id)
+
+        for row_index, servo_id in enumerate(sorted(self.servo_panels), start=1):
+            self.servo_panels[servo_id].frame.grid_configure(row=row_index)
+
+    def update_single_id_controls(self) -&gt; None:
+        servo_ids = self.discovered_servo_ids()
+        if len(servo_ids) == 1:
+            servo_id = servo_ids[0]
+            self.single_id_current_var.set(str(servo_id))
+            suggested_id = 2 if servo_id == 1 else servo_id + 1
+            if not self.single_id_new_var.get().strip() or self.single_id_new_var.get().strip() == str(servo_id):
+                self.single_id_new_var.set(str(min(253, suggested_id)))
+            self.single_id_frame.grid()
+            return
+
+        self.single_id_current_var.set(&quot;-&quot;)
+        self.single_id_frame.grid_remove()
+
+    def discovered_servo_ids(self) -&gt; list[int]:
+        return sorted(self.servo_panels)
+
+    def require_discovered_servos(self) -&gt; list[int] | None:
+        servo_ids = self.discovered_servo_ids()
+        if not servo_ids:
+            messagebox.showwarning(&quot;No Servos&quot;, &quot;Scan for servos first.&quot;)
+            return None
+        return servo_ids
+
+    def clamp_position(self, value: int) -&gt; int:
+        return max(SERVO_MIN_POS, min(SERVO_MAX_POS, value))
+
+    def clamp_degrees(self, value: float) -&gt; float:
+        return max(SERVO_MIN_DEG, min(SERVO_MAX_DEG, value))
+
+    def raw_to_degrees(self, raw: int) -&gt; float:
+        return raw * RAW_POSITION_TO_DEG
+
+    def degrees_to_raw(self, degrees: float) -&gt; int:
+        return self.clamp_position(round(self.clamp_degrees(degrees) / RAW_POSITION_TO_DEG))
+
+    def format_degrees(self, value: float) -&gt; str:
+        return f&quot;{value:.1f}&quot;
+
+    def parse_int(self, value: str, label: str) -&gt; int:
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f&quot;{label} must be an integer.&quot;) from exc
+
+    def parse_float(self, value: str, label: str) -&gt; float:
+        try:
+            return float(value)
+        except ValueError as exc:
+            raise ValueError(f&quot;{label} must be a number.&quot;) from exc
+
+    def rpm_to_raw(self, rpm: float) -&gt; int:
+        return max(0, min(MAX_RAW_SPEED, round(rpm / RAW_SPEED_TO_RPM)))
+
+    def accel_to_raw(self, accel_deg_s2: float) -&gt; int:
+        return max(0, min(MAX_RAW_ACCEL, round(accel_deg_s2 / RAW_ACCEL_TO_DEG_S2)))
+
+    def current_limit_a_to_raw(self, current_limit_a: float) -&gt; int:
+        return max(
+            0,
+            min(
+                MAX_RAW_CURRENT_LIMIT,
+                round((current_limit_a / MAX_MOTOR_CURRENT_A) * MAX_RAW_CURRENT_LIMIT),
+            ),
+        )
+
+    def update_guides(self, servo_id: int) -&gt; None:
+        state = self.get_state(servo_id)
+
+        try:
+            move_rpm = self.parse_float(state.position_speed_rpm_var.get(), &quot;Move Speed&quot;)
+            move_raw = self.rpm_to_raw(move_rpm)
+            state.move_speed_guide_var.set(
+                f&quot;Suggested 15-45 RPM. Command raw={move_raw} of {MAX_RAW_SPEED} max (~100 RPM @12V)&quot;
+            )
+        except ValueError:
+            state.move_speed_guide_var.set(&quot;Suggested 15-45 RPM. Enter a number.&quot;)
+
+        try:
+            accel_deg_s2 = self.parse_float(state.accel_deg_s2_var.get(), &quot;Accel&quot;)
+            accel_raw = self.accel_to_raw(accel_deg_s2)
+            state.accel_guide_var.set(
+                f&quot;Suggested 40-175 deg/s^2. Command raw={accel_raw} of {MAX_RAW_ACCEL} max&quot;
+            )
+        except ValueError:
+            state.accel_guide_var.set(&quot;Suggested 40-175 deg/s^2. Enter a number.&quot;)
+
+        try:
+            current_limit_a = self.parse_float(state.current_limit_a_var.get(), &quot;Current Limit&quot;)
+            current_limit_raw = self.current_limit_a_to_raw(current_limit_a)
+            state.current_limit_guide_var.set(
+                f&quot;Suggested 0.3-0.75 A. Command raw={current_limit_raw} of {MAX_RAW_CURRENT_LIMIT} max&quot;
+            )
+        except ValueError:
+            state.current_limit_guide_var.set(&quot;Suggested 0.3-0.75 A. Enter a number.&quot;)
+
+        try:
+            continuous_rpm = self.parse_float(state.continuous_speed_rpm_var.get(), &quot;Continuous Speed&quot;)
+            continuous_raw = self.rpm_to_raw(abs(continuous_rpm))
+            state.continuous_speed_guide_var.set(
+                f&quot;Suggested 5-20 RPM for bench testing. Command raw={continuous_raw}&quot;
+            )
+        except ValueError:
+            state.continuous_speed_guide_var.set(&quot;Suggested 5-20 RPM. Enter a number.&quot;)
+
+    def toggle_advanced(self, servo_id: int) -&gt; None:
+        state = self.get_state(servo_id)
+        if state.advanced_frame.winfo_viewable():
+            state.advanced_frame.grid_remove()
+            state.advanced_toggle_var.set(&quot;Show Advanced&quot;)
+        else:
+            state.advanced_frame.grid()
+            state.advanced_toggle_var.set(&quot;Hide Advanced&quot;)
+
+    def _run_bus_command(self, action_name: str, func) -&gt; bool:
+        bus = self.require_bus()
+        if bus is None:
+            return False
+        try:
+            func(bus)
+        except Exception as exc:
+            messagebox.showerror(f&quot;{action_name} Failed&quot;, str(exc))
+            self.set_status(f&quot;{action_name} failed.&quot;)
+            return False
+        return True
+
+    def sync_target_to_live(self, servo_id: int) -&gt; None:
+        state = self.get_state(servo_id)
+        bus = self.require_bus()
+        label = finger_label_for_id(servo_id)
+        if bus is None:
+            return
+
+        try:
+            feedback = bus.read_feedback(servo_id)
+        except Exception as exc:
+            messagebox.showerror(&quot;Read Failed&quot;, str(exc))
+            self.set_status(f&quot;{label} live position read failed.&quot;)
+            return
+
+        live_deg = self.raw_to_degrees(feedback.position)
+        state.position_var.set(self.format_degrees(live_deg))
+        state.live_position_var.set(self.format_degrees(live_deg))
+        self.refresh_feedback(servo_id, silent=True)
+        self.set_status(f&quot;{label} target synced to live position {live_deg:.1f} deg.&quot;)
+
+    def move_all_to_degrees(self, target_deg: float) -&gt; None:
+        self.all_target_deg_var.set(self.format_degrees(self.clamp_degrees(target_deg)))
+        self.move_all_fingers()
+
+    def jog_all_fingers(self, direction: int) -&gt; None:
+        bus = self.require_bus()
+        servo_ids = self.require_discovered_servos()
+        if bus is None or servo_ids is None:
+            return
+
+        try:
+            step_deg = self.parse_float(self.all_jog_step_deg_var.get(), &quot;All Fingers Jog Step&quot;)
+            current_target_deg = self.parse_float(self.all_target_deg_var.get(), &quot;All Fingers Target&quot;)
+        except Exception as exc:
+            messagebox.showerror(&quot;Jog All Failed&quot;, str(exc))
+            self.set_status(&quot;All fingers jog failed.&quot;)
+            return
+
+        target_deg = self.clamp_degrees(current_target_deg + direction * step_deg)
+        self.all_target_deg_var.set(self.format_degrees(target_deg))
+        self.move_all_fingers(status_prefix=&quot;All fingers jogged to&quot;)
+
+    def move_all_fingers(self, status_prefix: str | None = None) -&gt; None:
+        bus = self.require_bus()
+        servo_ids = self.require_discovered_servos()
+        if bus is None or servo_ids is None:
+            return
+        self.stop_motion_plan(silent=True)
+
+        try:
+            target_deg = self.clamp_degrees(self.parse_float(self.all_target_deg_var.get(), &quot;All Fingers Target&quot;))
+            speed_rpm = self.parse_float(self.all_move_speed_rpm_var.get(), &quot;All Fingers Move Speed&quot;)
+            accel_deg_s2 = self.parse_float(self.all_accel_deg_s2_var.get(), &quot;All Fingers Accel&quot;)
+            current_limit_a = self.parse_float(self.all_current_limit_a_var.get(), &quot;All Fingers Current Limit&quot;)
+        except Exception as exc:
+            messagebox.showerror(&quot;Move All Failed&quot;, str(exc))
+            self.set_status(&quot;All fingers move failed.&quot;)
+            return
+
+        use_soft_home = target_deg == 180.0 and any(
+            self.get_state(servo_id).last_control_mode in {&quot;speed&quot;, &quot;current&quot;} for servo_id in servo_ids
+        )
+        effective_speed_rpm = SOFT_HOME_SPEED_RPM if use_soft_home else speed_rpm
+        effective_accel_deg_s2 = SOFT_HOME_ACCEL_DEG_S2 if use_soft_home else accel_deg_s2
+        effective_current_limit_a = SOFT_HOME_CURRENT_LIMIT_A if use_soft_home else current_limit_a
+
+        speed_raw = self.rpm_to_raw(effective_speed_rpm)
+        accel_raw = self.accel_to_raw(effective_accel_deg_s2)
+        current_limit_raw = self.current_limit_a_to_raw(effective_current_limit_a)
+        target_raw = self.degrees_to_raw(target_deg)
+
+        def command(active_bus: FeetechBus) -&gt; None:
+            for servo_id in servo_ids:
+                active_bus.set_mode(servo_id, HLSMode.SERVO)
+                active_bus.enable_torque(servo_id, True)
+                active_bus.set_position(
+                    servo_id=servo_id,
+                    position=target_raw,
+                    speed=speed_raw,
+                    acc=accel_raw,
+                    torque_limit_raw=current_limit_raw,
+                    reg_write=True,
+                )
+            active_bus.action()
+
+        if not self._run_bus_command(&quot;Move All&quot;, command):
+            return
+
+        for servo_id in servo_ids:
+            state = self.get_state(servo_id)
+            state.position_var.set(self.format_degrees(target_deg))
+            state.last_control_mode = &quot;servo&quot;
+
+        self.all_target_deg_var.set(self.format_degrees(target_deg))
+        if status_prefix is not None:
+            prefix = status_prefix
+        elif use_soft_home:
+            prefix = &quot;All fingers soft homing to&quot;
+        else:
+            prefix = &quot;All fingers moving to&quot;
+        self.set_status(f&quot;{prefix} {target_deg:.1f} deg at speed {effective_speed_rpm:.1f} RPM.&quot;)
+        self.select_entry_text(self.all_target_entry)
+        self.refresh_all_feedback()
+
+    def set_torque_all(self, enabled: bool) -&gt; None:
+        servo_ids = self.require_discovered_servos()
+        if servo_ids is None:
+            return
+        self.stop_motion_plan(silent=True)
+
+        def command(bus: FeetechBus) -&gt; None:
+            for servo_id in servo_ids:
+                bus.enable_torque(servo_id, enabled)
+
+        if not self._run_bus_command(&quot;Torque All&quot;, command):
+            return
+        self.set_status(f&quot;All discovered servos torque {&#39;enabled&#39; if enabled else &#39;disabled&#39;}.&quot;)
+        self.refresh_all_feedback()
+
+    def start_motion_plan(
+        self,
+        target_override: float | None = None,
+        use_bend_limit_as_target: bool = False,
+    ) -&gt; None:
+        bus = self.require_bus()
+        servo_ids = self.require_discovered_servos()
+        if bus is None or servo_ids is None:
+            return
+
+        self.stop_motion_plan(silent=True)
+
+        try:
+            bend_limit_deg = self.clamp_degrees(
+                self.parse_float(self.motion_plan_bend_limit_deg_var.get(), &quot;Most Closed&quot;)
+            )
+            script = self.motion_plan_text.get(&quot;1.0&quot;, tk.END) if self.motion_plan_text is not None else &quot;&quot;
+            if target_override is not None:
+                script = f&quot;go to {float(target_override):.1f} degrees\n&quot;
+            elif use_bend_limit_as_target:
+                script = f&quot;go to {bend_limit_deg:.1f} degrees\n&quot;
+            parsed_steps = self.parse_sequence_script(script, servo_ids)
+            current_positions = {
+                servo_id: self.raw_to_degrees(bus.read_feedback(servo_id).position) for servo_id in servo_ids
+            }
+            default_speed_rpm = self.parse_float(self.all_move_speed_rpm_var.get(), &quot;Move Speed&quot;)
+            default_accel_deg_s2 = self.parse_float(self.all_accel_deg_s2_var.get(), &quot;Accel&quot;)
+            default_current_limit_a = self.parse_float(self.all_current_limit_a_var.get(), &quot;Current Limit&quot;)
+        except Exception as exc:
+            messagebox.showerror(&quot;Sequence Failed&quot;, str(exc))
+            self.motion_plan_status_var.set(str(exc))
+            return
+
+        self.motion_plan_state = {
+            &quot;servo_ids&quot;: servo_ids,
+            &quot;parsed_steps&quot;: parsed_steps,
+            &quot;step_index&quot;: 0,
+            &quot;bend_limit_deg&quot;: bend_limit_deg,
+            &quot;current_positions&quot;: current_positions,
+            &quot;default_speed_rpm&quot;: default_speed_rpm,
+            &quot;default_accel_deg_s2&quot;: default_accel_deg_s2,
+            &quot;default_current_limit_a&quot;: default_current_limit_a,
+        }
+        self.motion_plan_status_var.set(
+            f&quot;Running sequence with {len(parsed_steps)} step(s). Bend limit = {bend_limit_deg:.1f} deg.&quot;
+        )
+        self._run_motion_plan_step()
+
+    def _run_motion_plan_step(self) -&gt; None:
+        if self.motion_plan_state is None:
+            return
+
+        state = self.motion_plan_state
+        parsed_steps: list[dict] = state[&quot;parsed_steps&quot;]
+        if state[&quot;step_index&quot;] &gt;= len(parsed_steps):
+            self.motion_plan_status_var.set(&quot;Sequence complete.&quot;)
+            self.motion_plan_state = None
+            self.motion_plan_after_id = None
+            if self.motion_plan_text is not None:
+                self.motion_plan_text.focus_set()
+            self.refresh_all_feedback()
+            return
+
+        step = parsed_steps[state[&quot;step_index&quot;]]
+        state[&quot;step_index&quot;] += 1
+
+        if step[&quot;type&quot;] == &quot;wait&quot;:
+            duration_ms = max(0, int(step[&quot;duration_s&quot;] * 1000.0))
+            self.motion_plan_status_var.set(
+                f&quot;Step {state[&#39;step_index&#39;]}/{len(parsed_steps)}: waiting {step[&#39;duration_s&#39;]:.2f} s.&quot;
+            )
+            self.motion_plan_after_id = self.root.after(duration_ms, self._run_motion_plan_step)
+            return
+
+        servo_ids: list[int] = step[&quot;servo_ids&quot;]
+        target_deg = max(state[&quot;bend_limit_deg&quot;], self.clamp_degrees(step[&quot;target_deg&quot;]))
+        current_limit_a = (
+            step[&quot;current_limit_a&quot;]
+            if step[&quot;current_limit_a&quot;] is not None
+            else state[&quot;default_current_limit_a&quot;]
+        )
+        use_soft_home = target_deg == 180.0 and any(
+            self.get_state(servo_id).last_control_mode in {&quot;speed&quot;, &quot;current&quot;} for servo_id in servo_ids
+        )
+        effective_speed_rpm = SOFT_HOME_SPEED_RPM if use_soft_home else state[&quot;default_speed_rpm&quot;]
+        effective_accel_deg_s2 = SOFT_HOME_ACCEL_DEG_S2 if use_soft_home else state[&quot;default_accel_deg_s2&quot;]
+        effective_current_limit_a = SOFT_HOME_CURRENT_LIMIT_A if use_soft_home else current_limit_a
+
+        speed_raw = self.rpm_to_raw(effective_speed_rpm)
+        accel_raw = self.accel_to_raw(effective_accel_deg_s2)
+        current_limit_raw = self.current_limit_a_to_raw(effective_current_limit_a)
+        target_raw = self.degrees_to_raw(target_deg)
+
+        def command(bus: FeetechBus) -&gt; None:
+            for servo_id in servo_ids:
+                bus.set_mode(servo_id, HLSMode.SERVO)
+                bus.enable_torque(servo_id, True)
+                bus.set_position(
+                    servo_id=servo_id,
+                    position=target_raw,
+                    speed=speed_raw,
+                    acc=accel_raw,
+                    torque_limit_raw=current_limit_raw,
+                    reg_write=len(servo_ids) &gt; 1,
+                )
+            if len(servo_ids) &gt; 1:
+                bus.action()
+
+        if not self._run_bus_command(&quot;Sequence Step&quot;, command):
+            self.stop_motion_plan()
+            return
+
+        step_label = (
+            &quot;all fingers&quot;
+            if len(servo_ids) == len(state[&quot;servo_ids&quot;])
+            else &quot;, &quot;.join(finger_name_for_id(servo_id) for servo_id in servo_ids)
+        )
+        self.motion_plan_status_var.set(
+            f&quot;Step {state[&#39;step_index&#39;]}/{len(parsed_steps)}: moving {step_label} to {target_deg:.1f} deg with {effective_current_limit_a:.2f} A.&quot;
+        )
+
+        max_distance_deg = max(abs(target_deg - state[&quot;current_positions&quot;][servo_id]) for servo_id in servo_ids)
+        for servo_id in servo_ids:
+            state[&quot;current_positions&quot;][servo_id] = target_deg
+            panel_state = self.get_state(servo_id)
+            panel_state.position_var.set(self.format_degrees(target_deg))
+            panel_state.last_control_mode = &quot;servo&quot;
+        if len(servo_ids) == len(state[&quot;servo_ids&quot;]):
+            self.all_target_deg_var.set(self.format_degrees(target_deg))
+
+        estimated_motion_s = max(0.2, (max_distance_deg / max(1.0, effective_speed_rpm * 6.0)) + 0.2)
+        self.motion_plan_after_id = self.root.after(int(estimated_motion_s * 1000.0), self._run_motion_plan_step)
+
+    def stop_motion_plan(self, silent: bool = False) -&gt; None:
+        if self.motion_plan_after_id is not None:
+            self.root.after_cancel(self.motion_plan_after_id)
+            self.motion_plan_after_id = None
+        was_running = self.motion_plan_state is not None
+        self.motion_plan_state = None
+        if was_running and not silent:
+            self.motion_plan_status_var.set(&quot;Sequence stopped.&quot;)
+
+    def set_single_servo_id(self) -&gt; None:
+        bus = self.require_bus()
+        servo_ids = self.require_discovered_servos()
+        if bus is None or servo_ids is None:
+            return
+        if len(servo_ids) != 1:
+            messagebox.showwarning(&quot;Single Servo Only&quot;, &quot;Connect or scan exactly one servo before changing its ID.&quot;)
+            return
+
+        current_id = servo_ids[0]
+        try:
+            new_id = self.parse_int(self.single_id_new_var.get(), &quot;New ID&quot;)
+        except Exception as exc:
+            messagebox.showerror(&quot;Set ID Failed&quot;, str(exc))
+            return
+
+        if not 1 &lt;= new_id &lt;= 253:
+            messagebox.showwarning(&quot;Invalid ID&quot;, &quot;Choose a new servo ID between 1 and 253.&quot;)
+            return
+        if new_id == current_id:
+            self.set_status(f&quot;{finger_label_for_id(current_id)} already has ID {new_id}.&quot;)
+            return
+
+        def command(active_bus: FeetechBus) -&gt; None:
+            active_bus.set_id(current_id, new_id)
+
+        if not self._run_bus_command(&quot;Set ID&quot;, command):
+            return
+
+        self.set_status(
+            f&quot;{finger_label_for_id(current_id)} ID changed to {new_id}. Scan again to rediscover it on the bus.&quot;
+        )
+        self.single_id_current_var.set(str(new_id))
+        self.single_id_new_var.set(str(min(253, new_id + 1)))
+        self.sync_servo_panels([])
+        self.update_single_id_controls()
+
+    def move_to_degrees(self, servo_id: int, target_deg: float) -&gt; None:
+        state = self.get_state(servo_id)
+        target_deg = self.clamp_degrees(target_deg)
+        state.position_var.set(self.format_degrees(target_deg))
+        if target_deg == 180.0 and state.last_control_mode in {&quot;speed&quot;, &quot;current&quot;}:
+            self.move_servo(
+                servo_id,
+                status_prefix=f&quot;{finger_label_for_id(servo_id)} soft homing to&quot;,
+                speed_rpm_override=SOFT_HOME_SPEED_RPM,
+                accel_deg_s2_override=SOFT_HOME_ACCEL_DEG_S2,
+                current_limit_a_override=SOFT_HOME_CURRENT_LIMIT_A,
+            )
+            return
+        self.move_servo(servo_id)
+
+    def jog_servo(self, servo_id: int, direction: int) -&gt; None:
+        state = self.get_state(servo_id)
+        bus = self.require_bus()
+        label = finger_label_for_id(servo_id)
+        if bus is None:
+            return
+
+        try:
+            feedback = bus.read_feedback(servo_id)
+            step_deg = self.parse_float(state.jog_step_var.get(), &quot;Jog Step&quot;)
+        except Exception as exc:
+            messagebox.showerror(&quot;Jog Failed&quot;, str(exc))
+            self.set_status(f&quot;{label} jog failed.&quot;)
+            return
+
+        live_deg = self.raw_to_degrees(feedback.position)
+        target_deg = self.clamp_degrees(live_deg + direction * step_deg)
+        state.position_var.set(self.format_degrees(target_deg))
+        state.live_position_var.set(self.format_degrees(live_deg))
+        self.move_servo(servo_id, status_prefix=f&quot;{label} jogged to&quot;)
+
+    def move_servo(
+        self,
+        servo_id: int,
+        status_prefix: str | None = None,
+        speed_rpm_override: float | None = None,
+        accel_deg_s2_override: float | None = None,
+        current_limit_a_override: float | None = None,
+    ) -&gt; None:
+        state = self.get_state(servo_id)
+        label = finger_label_for_id(servo_id)
+        self.stop_motion_plan(silent=True)
+
+        def command(bus: FeetechBus) -&gt; None:
+            speed_rpm = (
+                speed_rpm_override
+                if speed_rpm_override is not None
+                else self.parse_float(state.position_speed_rpm_var.get(), &quot;Move Speed&quot;)
+            )
+            accel_deg_s2 = (
+                accel_deg_s2_override
+                if accel_deg_s2_override is not None
+                else self.parse_float(state.accel_deg_s2_var.get(), &quot;Accel&quot;)
+            )
+            current_limit_a = (
+                current_limit_a_override
+                if current_limit_a_override is not None
+                else self.parse_float(state.current_limit_a_var.get(), &quot;Current Limit&quot;)
+            )
+            bus.set_mode(servo_id, HLSMode.SERVO)
+            bus.enable_torque(servo_id, True)
+            bus.set_position(
+                servo_id=servo_id,
+                position=self.degrees_to_raw(self.parse_float(state.position_var.get(), &quot;Target Position&quot;)),
+                speed=self.rpm_to_raw(speed_rpm),
+                acc=self.accel_to_raw(accel_deg_s2),
+                torque_limit_raw=self.current_limit_a_to_raw(current_limit_a),
+            )
+
+        if not self._run_bus_command(&quot;Move&quot;, command):
+            return
+
+        target_deg = self.clamp_degrees(self.parse_float(state.position_var.get(), &quot;Target Position&quot;))
+        state.position_var.set(self.format_degrees(target_deg))
+        state.last_control_mode = &quot;servo&quot;
+        prefix = status_prefix or f&quot;{label} moving to&quot;
+        status_speed_rpm = (
+            speed_rpm_override
+            if speed_rpm_override is not None
+            else self.parse_float(state.position_speed_rpm_var.get(), &quot;Move Speed&quot;)
+        )
+        self.set_status(f&quot;{prefix} {state.position_var.get()} deg at speed {status_speed_rpm:.1f} RPM.&quot;)
+        self.select_entry_text(state.position_entry)
+        self.refresh_feedback(servo_id, silent=True)
+
+    def speed_servo(self, servo_id: int, direction: int) -&gt; None:
+        state = self.get_state(servo_id)
+        label = finger_label_for_id(servo_id)
+        self.stop_motion_plan(silent=True)
+
+        def command(bus: FeetechBus) -&gt; None:
+            bus.set_mode(servo_id, HLSMode.SPEED)
+            bus.enable_torque(servo_id, True)
+            bus.set_speed(
+                servo_id=servo_id,
+                speed=direction * self.rpm_to_raw(self.parse_float(state.continuous_speed_rpm_var.get(), &quot;Continuous Speed&quot;)),
+                acc=self.accel_to_raw(self.parse_float(state.accel_deg_s2_var.get(), &quot;Accel&quot;)),
+                torque_limit_raw=self.current_limit_a_to_raw(
+                    self.parse_float(state.current_limit_a_var.get(), &quot;Current Limit&quot;)
+                ),
+            )
+
+        if not self._run_bus_command(&quot;Speed&quot;, command):
+            return
+        state.last_control_mode = &quot;speed&quot;
+        direction_name = &quot;forward&quot; if direction &gt; 0 else &quot;reverse&quot;
+        self.set_status(
+            f&quot;{label} running {direction_name} in continuous speed mode at {state.continuous_speed_rpm_var.get()} RPM.&quot;
+        )
+        self.refresh_feedback(servo_id, silent=True)
+
+    def stop_speed_servo(self, servo_id: int) -&gt; None:
+        state = self.get_state(servo_id)
+        label = finger_label_for_id(servo_id)
+        self.stop_motion_plan(silent=True)
+
+        def command(bus: FeetechBus) -&gt; None:
+            bus.set_mode(servo_id, HLSMode.SPEED)
+            bus.enable_torque(servo_id, True)
+            bus.set_speed(
+                servo_id=servo_id,
+                speed=0,
+                acc=self.accel_to_raw(self.parse_float(state.accel_deg_s2_var.get(), &quot;Accel&quot;)),
+                torque_limit_raw=self.current_limit_a_to_raw(
+                    self.parse_float(state.current_limit_a_var.get(), &quot;Current Limit&quot;)
+                ),
+            )
+
+        if not self._run_bus_command(&quot;Stop Speed&quot;, command):
+            return
+        state.last_control_mode = &quot;speed&quot;
+        self.set_status(f&quot;{label} continuous speed command stopped.&quot;)
+        self.refresh_feedback(servo_id, silent=True)
+
+    def current_servo(self, servo_id: int) -&gt; None:
+        state = self.get_state(servo_id)
+        label = finger_label_for_id(servo_id)
+        self.stop_motion_plan(silent=True)
+
+        def command(bus: FeetechBus) -&gt; None:
+            bus.set_mode(servo_id, HLSMode.CURRENT)
+            bus.enable_torque(servo_id, True)
+            bus.set_current_raw(servo_id, self.parse_int(state.current_var.get(), &quot;Current Raw&quot;))
+
+        if not self._run_bus_command(&quot;Current&quot;, command):
+            return
+        state.last_control_mode = &quot;current&quot;
+        self.set_status(f&quot;{label} current command set to {state.current_var.get()} raw units.&quot;)
+        self.refresh_feedback(servo_id, silent=True)
+
+    def set_torque(self, servo_id: int, enabled: bool) -&gt; None:
+        label = finger_label_for_id(servo_id)
+        self.stop_motion_plan(silent=True)
+
+        def command(bus: FeetechBus) -&gt; None:
+            bus.enable_torque(servo_id, enabled)
+
+        if not self._run_bus_command(&quot;Torque&quot;, command):
+            return
+        self.set_status(f&quot;{label} torque {&#39;enabled&#39; if enabled else &#39;disabled&#39;}.&quot;)
+        self.refresh_feedback(servo_id, silent=True)
+
+    def refresh_feedback(self, servo_id: int, silent: bool = False) -&gt; None:
+        state = self.get_state(servo_id)
+        bus = self.require_bus()
+        label = finger_label_for_id(servo_id)
+        if bus is None:
+            return
+
+        try:
+            feedback = bus.read_feedback(servo_id)
+        except Exception as exc:
+            state.feedback_var.set(f&quot;Read failed: {exc}&quot;)
+            if not silent:
+                self.set_status(f&quot;{label} refresh failed.&quot;)
+            return
+
+        state.feedback_var.set(
+            &quot;pos={:.1f} deg ({} raw) speed={} load={} voltage={:.1f}V temp={}C moving={} current_raw={}&quot;.format(
+                self.raw_to_degrees(feedback.position),
+                feedback.position,
+                feedback.speed,
+                feedback.load,
+                feedback.voltage_v,
+                feedback.temperature_c,
+                feedback.moving,
+                feedback.current_raw,
+            )
+        )
+        state.live_position_var.set(self.format_degrees(self.raw_to_degrees(feedback.position)))
+        if not silent:
+            self.set_status(f&quot;{label} feedback refreshed.&quot;)
+
+    def refresh_all_feedback(self) -&gt; None:
+        for servo_id in list(self.servo_panels):
+            self.refresh_feedback(servo_id, silent=True)
+
+    def _schedule_refresh(self) -&gt; None:
+        self.root.after(self._refresh_interval_ms(), self._auto_refresh_tick)
+
+    def _refresh_interval_ms(self) -&gt; int:
+        try:
+            value = int(self.refresh_ms_var.get())
+        except ValueError:
+            value = 500
+        return max(100, value)
+
+    def _auto_refresh_tick(self) -&gt; None:
+        if self.auto_refresh_var.get() and self.bus is not None and self.servo_panels and self.motion_plan_state is None:
+            self.refresh_all_feedback()
+        self._schedule_refresh()
+
+
+def build_cli_parser() -&gt; argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=&quot;Standalone Feetech HLS controller.&quot;)
+    parser.add_argument(&quot;--port&quot;, help=&quot;Serial port, for example COM7&quot;)
+    parser.add_argument(&quot;--baud&quot;, type=int, default=1_000_000, help=&quot;Bus baud rate&quot;)
+    parser.add_argument(&quot;--timeout&quot;, type=float, default=0.1, help=&quot;Serial timeout in seconds&quot;)
+
+    sub = parser.add_subparsers(dest=&quot;command&quot;)
+    sub.add_parser(&quot;gui&quot;, help=&quot;Launch the desktop controller&quot;)
+    sub.add_parser(&quot;ports&quot;, help=&quot;List available serial ports&quot;)
+
+    p_scan = sub.add_parser(&quot;scan&quot;, help=&quot;Ping a range of servo IDs&quot;)
+    p_scan.add_argument(&quot;--start&quot;, type=int, default=0)
+    p_scan.add_argument(&quot;--end&quot;, type=int, default=20)
+
+    p_ping = sub.add_parser(&quot;ping&quot;, help=&quot;Ping one servo&quot;)
+    p_ping.add_argument(&quot;--id&quot;, type=int, required=True)
+
+    p_read = sub.add_parser(&quot;read&quot;, help=&quot;Read one servo&#39;s feedback block&quot;)
+    p_read.add_argument(&quot;--id&quot;, type=int, required=True)
+
+    p_move = sub.add_parser(&quot;move&quot;, help=&quot;Position move in degrees&quot;)
+    p_move.add_argument(&quot;--id&quot;, type=int, required=True)
+    p_move.add_argument(&quot;--degrees&quot;, type=float, required=True)
+    p_move.add_argument(&quot;--speed-rpm&quot;, type=float, default=float(DEFAULT_POSITION_SPEED_RPM))
+    p_move.add_argument(&quot;--accel-deg-s2&quot;, type=float, default=float(DEFAULT_ACCEL_DEG_S2))
+    p_move.add_argument(&quot;--current-limit-a&quot;, type=float, default=float(DEFAULT_CURRENT_LIMIT_A))
+
+    p_speed = sub.add_parser(&quot;speed&quot;, help=&quot;Continuous speed mode&quot;)
+    p_speed.add_argument(&quot;--id&quot;, type=int, required=True)
+    p_speed.add_argument(&quot;--rpm&quot;, type=float, required=True)
+    p_speed.add_argument(&quot;--accel-deg-s2&quot;, type=float, default=float(DEFAULT_ACCEL_DEG_S2))
+    p_speed.add_argument(&quot;--current-limit-a&quot;, type=float, default=float(DEFAULT_CURRENT_LIMIT_A))
+
+    p_current = sub.add_parser(&quot;current&quot;, help=&quot;Current mode raw command&quot;)
+    p_current.add_argument(&quot;--id&quot;, type=int, required=True)
+    p_current.add_argument(&quot;--raw&quot;, type=int, required=True)
+
+    p_torque = sub.add_parser(&quot;torque&quot;, help=&quot;Enable or disable the servo output stage&quot;)
+    p_torque.add_argument(&quot;--id&quot;, type=int, required=True)
+    p_torque.add_argument(&quot;--enable&quot;, action=&quot;store_true&quot;)
+    p_torque.add_argument(&quot;--disable&quot;, action=&quot;store_true&quot;)
+
+    p_monitor = sub.add_parser(&quot;monitor&quot;, help=&quot;Continuously print feedback&quot;)
+    p_monitor.add_argument(&quot;--id&quot;, type=int, required=True)
+    p_monitor.add_argument(&quot;--interval&quot;, type=float, default=0.2)
+
+    return parser
+
+
+def require_port(args: argparse.Namespace) -&gt; str:
+    if args.port:
+        return args.port
+    raise SystemExit(&quot;--port is required for this command.&quot;)
+
+
+def raw_to_degrees(raw: int) -&gt; float:
+    return raw * RAW_POSITION_TO_DEG
+
+
+def rpm_to_raw(rpm: float) -&gt; int:
+    return max(0, min(MAX_RAW_SPEED, round(rpm / RAW_SPEED_TO_RPM)))
+
+
+def accel_to_raw(accel_deg_s2: float) -&gt; int:
+    return max(0, min(MAX_RAW_ACCEL, round(accel_deg_s2 / RAW_ACCEL_TO_DEG_S2)))
+
+
+def current_limit_a_to_raw(current_limit_a: float) -&gt; int:
+    return max(
+        0,
+        min(
+            MAX_RAW_CURRENT_LIMIT,
+            round((current_limit_a / MAX_MOTOR_CURRENT_A) * MAX_RAW_CURRENT_LIMIT),
+        ),
+    )
+
+
+def degrees_to_raw(degrees: float) -&gt; int:
+    clamped = max(SERVO_MIN_DEG, min(SERVO_MAX_DEG, degrees))
+    return max(SERVO_MIN_POS, min(SERVO_MAX_POS, round(clamped / RAW_POSITION_TO_DEG)))
+
+
+def print_feedback(feedback: Feedback) -&gt; None:
+    print(
+        &quot;pos={:.1f} deg ({} raw) speed={} load={} voltage={:.1f}V temp={}C moving={} current_raw={}&quot;.format(
+            raw_to_degrees(feedback.position),
+            feedback.position,
+            feedback.speed,
+            feedback.load,
+            feedback.voltage_v,
+            feedback.temperature_c,
+            feedback.moving,
+            feedback.current_raw,
+        )
+    )
+
+
+def launch_gui() -&gt; int:
+    root = tk.Tk()
+    style = ttk.Style(root)
+    if &quot;vista&quot; in style.theme_names():
+        style.theme_use(&quot;vista&quot;)
+    app = ServoControlApp(root)
+    root.protocol(&quot;WM_DELETE_WINDOW&quot;, lambda: (app.disconnect(silent=True), root.destroy()))
+    root.mainloop()
+    return 0
+
+
+def run_cli(args: argparse.Namespace) -&gt; int:
+    if args.command in (None, &quot;gui&quot;):
+        return launch_gui()
+
+    if args.command == &quot;ports&quot;:
+        list_ports()
+        return 0
+
+    port = require_port(args)
+    with FeetechBus(port=port, baudrate=args.baud, timeout=args.timeout) as bus:
+        if args.command == &quot;scan&quot;:
+            found = bus.scan(args.start, args.end)
+            print(&quot;Found servos:&quot; if found else &quot;No servos found.&quot;, found)
+            return 0
+
+        if args.command == &quot;ping&quot;:
+            bus.ping(args.id)
+            print(f&quot;{finger_label_for_id(args.id)} responded.&quot;)
+            return 0
+
+        if args.command == &quot;read&quot;:
+            print_feedback(bus.read_feedback(args.id))
+            return 0
+
+        if args.command == &quot;move&quot;:
+            bus.set_mode(args.id, HLSMode.SERVO)
+            bus.enable_torque(args.id, True)
+            bus.set_position(
+                servo_id=args.id,
+                position=degrees_to_raw(args.degrees),
+                speed=rpm_to_raw(args.speed_rpm),
+                acc=accel_to_raw(args.accel_deg_s2),
+                torque_limit_raw=current_limit_a_to_raw(args.current_limit_a),
+            )
+            print(f&quot;{finger_label_for_id(args.id)} moving to {args.degrees:.1f} deg.&quot;)
+            return 0
+
+        if args.command == &quot;speed&quot;:
+            bus.set_mode(args.id, HLSMode.SPEED)
+            bus.enable_torque(args.id, True)
+            direction = -1 if args.rpm &lt; 0 else 1
+            bus.set_speed(
+                servo_id=args.id,
+                speed=direction * rpm_to_raw(abs(args.rpm)),
+                acc=accel_to_raw(args.accel_deg_s2),
+                torque_limit_raw=current_limit_a_to_raw(args.current_limit_a),
+            )
+            print(f&quot;{finger_label_for_id(args.id)} continuous speed set to {args.rpm:.1f} RPM.&quot;)
+            return 0
+
+        if args.command == &quot;current&quot;:
+            bus.set_mode(args.id, HLSMode.CURRENT)
+            bus.enable_torque(args.id, True)
+            bus.set_current_raw(args.id, args.raw)
+            print(f&quot;{finger_label_for_id(args.id)} current raw set to {args.raw}.&quot;)
+            return 0
+
+        if args.command == &quot;torque&quot;:
+            if args.enable == args.disable:
+                raise SystemExit(&quot;Choose exactly one of --enable or --disable.&quot;)
+            bus.enable_torque(args.id, args.enable)
+            print(f&quot;{finger_label_for_id(args.id)} torque {&#39;enabled&#39; if args.enable else &#39;disabled&#39;}.&quot;)
+            return 0
+
+        if args.command == &quot;monitor&quot;:
+            try:
+                while True:
+                    print_feedback(bus.read_feedback(args.id))
+                    time.sleep(args.interval)
+            except KeyboardInterrupt:
+                return 0
+
+    raise SystemExit(f&quot;Unsupported command: {args.command}&quot;)
+
+
+def main() -&gt; int:
+    parser = build_cli_parser()
+    args = parser.parse_args()
+    return run_cli(args)
+
+
+if __name__ == &quot;__main__&quot;:
+    sys.exit(main())
+</code></pre>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>
+

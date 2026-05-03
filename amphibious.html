@@ -1,0 +1,143 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Amphibious Robot | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Amphibious robotics</p><h1>Embedded shape-morphing amphibious robot.</h1><p>SMART, the Shape-Morphing Amphibious RoboT from "Embedded shape morphing for
+morphologically adaptive robots" published in Nature Communications, uses four 2D bending shape-morphing module legs to switch between straight flippers for swimming and curved limbs for walking.</p></div></section>
+  <main class="shell">
+    <section class="section tight">
+      <div class="case-snapshot">
+        <div>
+          <p class="snapshot-label">What this page covers</p>
+          <h3>A full amphibious robot built around shape-morphing legs.</h3>
+          <p>The robot-level evidence behind SMART highlights packaging, waterproofing, rotating leg power transfer, embedded control, and land/water tests beyond the bench setup.</p>
+        </div>
+        <ul>
+          <li><strong>Robot body:</strong> compact waterproof enclosure, motors, shafts, seals, batteries, electronics, and rotating leg interfaces.</li>
+          <li><strong>Leg system:</strong> four shape-morphing legs that switch between straight swimming flippers and curved walking limbs.</li>
+          <li><strong>Testing:</strong> tank transitions, loose-pebble traversal, outdoor walking, river entry, endurance estimates, and Arduino MKR control code.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid-3">
+        <div class="panel"><h3>Problem</h3><p>Build one physical platform that can swim and walk by changing limb geometry, instead of carrying separate mechanisms for water and land.</p></div>
+        <div class="panel"><h3>System challenge</h3><p>Package batteries, electronics, motors, waterproofing, thermal morphing, rotating leg power transfer, and Bluetooth control inside one robot body.</p></div>
+        <div class="panel"><h3>System integration</h3><p>The published author contribution identifies my role in designing and characterizing the amphibious robot, including the leg mechanism, packaging, and land/water testing.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">What the project demonstrates</p>
+        <h2>A complete field robot, not only a morphing-material sample.</h2>
+        <p>The whole-system challenge was to package, power, seal, drive, remotely command, and test a shape-changing robot across real land/water transitions.</p>
+      </div>
+      <div class="grid-4">
+        <div class="panel"><h3>Mode-changing mechanism</h3><p>Four 2D bending legs switch between straight swimming flippers and curved walking limbs, so one robot body can handle two very different terrain modes.</p></div>
+        <div class="panel"><h3>Constrained packaging</h3><p>The robot body integrates motors, batteries, controller hardware, seals, shafts, and leg interfaces inside a compact 3D printed waterproof enclosure.</p></div>
+        <div class="panel"><h3>Power architecture</h3><p>A single LiPo pack is split into logic and actuator rails, supporting microcontroller control, DC motors, and thermal shape-morphing modules without a tether.</p></div>
+        <div class="panel"><h3>Field validation</h3><p>The robot was tested beyond a bench setup: indoor tank transitions, loose-pebble shore traversal, outdoor walking on rock, and river entry.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">System architecture</p>
+        <h2>Body packaging, rotating legs, and thermal shape locking had to work together.</h2>
+        <p>Each leg is a 2D bending SMM connected through a shaft to a DC motor inside the waterproof body. An elastic gasket and dielectric grease protect the electronics, while electrical slip rings carry power into legs that must continuously rotate during ground locomotion.</p>
+      </div>
+      <div class="grid-2">
+        <figure class="media-contain"><img src="assets/supporting/Amphibios_MorphingProcess.png" alt="Amphibious robot morphing process"><figcaption>Mode-transition sequence: legs rotate out of the water, soften, morph, then re-enter water for rapid stiffening.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/supporting/Amphibios_BlockDiagram.png" alt="Amphibious robot block diagram"><figcaption>System decomposition across actuation, structure, electronics, and locomotion modes.</figcaption></figure>
+      </div>
+      <div class="grid-3 source-note">
+        <figure class="media-contain"><img src="assets/papers/amphibious_extra/leg-detailed-labeled.png" alt="Detailed labeled amphibious robot leg"><figcaption>Leg package detail: the morphing limb is a structural leg, thermal actuator, and rotating drivetrain interface.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/amphibious_extra/swimming-mode-render.png" alt="SMART swimming mode render"><figcaption>Swimming mode uses a low-drag straight-leg configuration for water propulsion.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/amphibious_extra/walking-mode-render.png" alt="SMART walking mode render"><figcaption>Walking mode curves the legs to produce ground clearance and terrain contact.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Embedded morphing mechanism</p>
+        <h2>The limb is both structure and actuator package.</h2>
+        <p>The amphibious robot inherits the paper's 2D bending SMM architecture: an SMP spine provides shape locking, an embedded resistance heater softens the spine above its glass transition, and a sheathed twisted-and-coiled actuator bends the leg while also supporting self-sensing in the base module work.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><h3>Variable stiffness</h3><p>The SMP spine changes from a rigid structural member to a soft morphing body when heated; the paper reports about a 67x storage-modulus drop from room temperature to 110 C.</p></div>
+        <div class="panel"><h3>Shape sequence</h3><p>The morphing cycle softens the spine, actuates the TCA to bend the leg, cools the SMP to lock the new shape, then removes TCA power so the leg holds its geometry without continuous actuation.</p></div>
+        <div class="panel"><h3>Water as a system advantage</h3><p>For SMART, the legs are dipped back into water after morphing, using the operating environment as an active cooling path for rapid stiffening.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Validation</p>
+        <h2>Indoor tank and outdoor river tests validate the sealed robot body.</h2>
+        <p>The robot swam with straight legs, morphed the legs to roughly 90 deg for walking, climbed from water onto loose pebbles, and demonstrated an outdoor walk-to-swim transition in a natural environment at about 3 C.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Mode</th><th>Configuration</th><th>Reported behavior</th><th>Engineering result</th></tr></thead>
+          <tbody>
+            <tr><td>Indoor swim</td><td>All legs are straight; the rear two legs swing while the front two remain stationary.</td><td>0.2 body lengths per second in a room-temperature tank.</td><td>Separates aquatic propulsion from walking geometry. Shows waterproofing.</td></tr>
+            <tr><td>Water-to-land transition</td><td>Legs rotate vertically, soften, curve to about 90 deg, then dip into water for cooling.</td><td>Robot walks up onto shore and traverses loose pebbles.</td><td>Shows morphing, locking, and drivetrain timing in one sequence.</td></tr>
+            <tr><td>Outdoor land-to-water transition</td><td>Curved legs walk on rock, rotate to about 30 deg for recovery, then return near straight at about 10 deg.</td><td>1 body length per second walking before front-leg push-off into the river.</td><td>Demonstrates unconstrained operation outside the lab tank.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid-3 source-note">
+        <figure class="media-contain"><img src="assets/papers/amphibious_extra/swim-to-walk-overlay.png" alt="Experimental swimming to walking overlay"><figcaption>Experimental overlay of the swimming-to-walking transition across water, shore, and loose substrate.</figcaption></figure>
+        <figure class="media-contain"><video src="assets/papers/amphibious_extra/swimming-to-walking.mp4" poster="assets/papers/amphibious_extra/swimming-to-walking-poster.png" autoplay loop muted playsinline controls></video><figcaption>Tank demonstration: the robot swims, morphs the legs, locks the walking shape, and climbs onto shore.</figcaption></figure>
+        <figure class="media-contain"><video src="assets/papers/amphibious_extra/walking-outside.mp4" poster="assets/papers/amphibious_extra/walking-outside-poster.png" autoplay loop muted playsinline controls></video><figcaption>Outdoor walking on uneven rock before the land-to-water transition.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Energy and endurance</p>
+        <h2>The morphing cost is intermittent, not continuous.</h2>
+        <p>About 350 J is the estimated energy requirement for one 90 deg shape-morphing process of the 2D bending SMM. With the 450 mAh, 11.1 V pack, the module could morph 24 times before half capacity, and the amphibious robot was estimated at 31 minutes / 260 m walking or 37 minutes / 62 m swimming before half capacity.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><h3>Morph then lock</h3><p>The SMM legs consume energy during heating and shape change, then retain the curved or straight geometry after cooling. That matters because the actuator does not need to continuously hold the robot's walking shape.</p></div>
+        <div class="panel"><h3>Battery-aware operation</h3><p>The paper estimates roughly 350 J for a 90 deg morphing event, which translates to about 24 morph cycles before half of the 450 mAh, 11.1 V pack is used.</p></div>
+        <div class="panel"><h3>System implication</h3><p>Estimated half-capacity operation was 31 minutes / 260 m walking or 37 minutes / 62 m swimming, showing that endurance was considered at the robot level, not only at the material level.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Embedded software</p>
+        <h2>Arduino MKR BLE firmware turns the prototype into an untethered robot.</h2>
+        <p>The Nature Communications firmware exposes a BLE command service for SMART. A writable byte characteristic selects terrestrial movement, swimming gait, morphing, reheating, encoder reset, leg heating for swimming, and push-off routines.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><h3>Wireless mode control</h3><p>Phone-side BLE commands trigger named robot behaviors instead of requiring a wired serial connection in the field.</p></div>
+        <div class="panel"><h3>Encoded leg motors</h3><p>Four leg motors use encoder counts, phase pins, and PWM control; each motor is stopped when its target position is reached.</p></div>
+        <div class="panel"><h3>Morphing sequence</h3><p>Heating, TCA actuation, motor positioning, water-assisted cooling, and push-off actions are sequenced for land/water transitions.</p></div>
+      </div>
+      <p class="source-note"><a class="button" href="software.html">Open controller overview</a> <a class="button" href="code-amphibious.html">View Arduino MKR source</a></p>
+    </section>
+
+    <section class="section grid-2">
+      <figure class="media-contain"><video src="assets/papers/amphibious_extra/outside-morph-to-swim.mp4" poster="assets/papers/amphibious_extra/outside-morph-to-swim-poster.png" autoplay loop muted playsinline controls></video><figcaption>Outdoor land-to-water transition: curved walking legs recover toward swimmer geometry before river entry.</figcaption></figure>
+      <div class="panel">
+        <h3>What this demonstrates</h3>
+        <p>One robot body combines waterproofing, thermal shape locking, rotating leg power transfer, battery distribution, remote control, and environmental testing.</p>
+        <p>The same leg modules are shown swimming, morphing, walking, and returning toward swimming geometry outside the lab.</p>
+        <p><a class="button" href="https://www.nature.com/articles/s41467-023-41708-6">Open Nature Communications article</a></p>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>

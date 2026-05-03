@@ -1,0 +1,87 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAD, Mechanisms, and Printer Retrofit | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">CAD and Retrofit</p><h1>CAD, mechanisms, and printer modernization.</h1><p>Mechanical design examples spanning compliant robotic mechanisms, an M3ID printer retrofit with Smart Orbiter packaging, and printable geometry work for FDM fabrication.</p></div></section>
+  <main class="shell">
+    <section class="section tight">
+      <div class="case-snapshot">
+        <div>
+          <p class="snapshot-label">What this page covers</p>
+          <h3>CAD examples and a practical printer retrofit.</h3>
+          <p>The CAD evidence shows mechanism reasoning for the hand, an M3ID printer toolhead retrofit, printable geometry, and the custom startup G-code needed to make the modified machine usable.</p>
+        </div>
+        <ul>
+          <li><strong>Hand mechanism:</strong> physical constraints behind the compliant finger and the current/contact limit reasoning.</li>
+          <li><strong>Printer retrofit:</strong> carriage interface, Smart Orbiter-style right extruder, cooling duct, stock left extruder, and service access.</li>
+          <li><strong>Machine behavior:</strong> Klipper startup logic, purge/wipe paths, slicer variables, and dual-extruder preparation.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>mk19 mechanism reasoning</h2><p>The hand project combines controls and simulation; this section focuses on the physical design decisions that make the finger testable as a mechanism.</p></div>
+      <div class="grid-3">
+        <div class="panel"><h3>Sliding drive joint</h3><p>The motor disk drives the bar while allowing translation, which reduces parasitic constraint from eccentricity and printed tolerance stackup.</p></div>
+        <div class="panel"><h3>Bending membrane</h3><p>The compliant drive coupling bends when the proximal link is blocked, letting the distal link continue wrapping rather than forcing an immediate stall.</p></div>
+        <div class="panel"><h3>Hard stop and stiffness</h3><p>The physical stop near 90 deg, flexure stiffness assumptions, and proximal stiffness channel make the hand testable as a mechanism rather than only as a servo assembly.</p></div>
+      </div>
+    </section>
+    <section class="section grid-2">
+      <figure class="wide-media"><img src="assets/hand/free-space-vs-contact-limits.png" alt="Free-space and contact limit comparison"><figcaption>Mechanism behavior is evaluated separately for free-space bending and contact-limited distal wrap.</figcaption></figure>
+      <figure class="wide-media"><img src="assets/hand/torque-limit-sweep.png" alt="Torque limit sweep"><figcaption>Torque/current limits are treated as design constraints for the physical mechanism.</figcaption></figure>
+    </section>
+    <section class="section">
+      <div class="section-head"><h2>M3ID printer retrofit</h2><p>Right-extruder modernization for a proprietary M3ID printer: the stock left extruder remains available for soft filament while the right side is adapted for a Smart Orbiter-style direct-drive toolhead, added cooling, and Klipper-based operation.</p></div>
+      <div class="grid-3">
+        <div class="panel"><h3>Mechanical adaptation</h3><p>The mount preserves the proprietary carriage interface while creating a new toolhead envelope for the replacement right extruder, blower duct, hotend access, and mounting bosses.</p></div>
+        <div class="panel"><h3>System conversion</h3><p>The hardware change pairs with a control-stack migration from the printer's proprietary OctoPrint-based workflow to Klipper, allowing custom configuration, macros, and G-code behavior to be documented with the CAD.</p></div>
+        <div class="panel"><h3>Material capability</h3><p>Keeping the left extruder stock protects the flexible-filament path, while the right extruder upgrade targets more consistent rigid-filament extrusion and easier service access.</p></div>
+      </div>
+      <div class="grid-2 source-note">
+        <div class="panel"><h3>Custom start G-code</h3><p>The startup routine handles dual-extruder preparation rather than relying on a generic slicer template: it selects the bed mesh and bed temperature from the active material pair, heats both hotends, runs separate purge/wipe paths for T0 and T1, temporarily reduces flow during purge, parks each tool, applies ooze-prevention standby temperatures, homes the tool axis, and starts the job in relative-extrusion mode.</p><p><a class="button" href="code-m3id-start-gcode.html">View start G-code</a></p></div>
+        <div class="panel"><h3>Why it matters</h3><p>The code is modest by itself, but it documents the machine-integration work behind the retrofit: coordinating stock and upgraded extruders, preventing startup contamination, making dual-material jobs repeatable, and tying slicer variables into the Klipper-controlled machine behavior.</p></div>
+      </div>
+      <div class="grid-4 source-note">
+        <figure class="media-contain"><img src="assets/cad/printer/m3id-smart-orbit-assembly.png" alt="M3ID right extruder retrofit CAD assembly"><figcaption>Assembly view showing the replacement right-extruder package, cooling duct, and proprietary carriage adapter.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/cad/printer/m3id-smart-orbit-front.png" alt="Front view of M3ID Smart Orbiter retrofit"><figcaption>Front packaging view used to check blower, hotend, and carriage clearances.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/cad/printer/m3id-smart-orbit-side.png" alt="Side view of M3ID Smart Orbiter retrofit"><figcaption>Side view showing toolhead stack height, fan position, nozzle access, and bed-facing geometry.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/cad/printer/m3id-smart-orbit-bottom-iso.png" alt="Bottom isometric assembly view of M3ID printer retrofit"><figcaption>Bottom assembly view for checking fastener access, airflow path, and hotend clearance.</figcaption></figure>
+      </div>
+      <div class="grid-3 source-note">
+        <figure class="media-contain"><img src="assets/cad/printer/m3id-mount-body.png" alt="M3ID printer adapter mount with cooling duct"><figcaption>Bare mount with the blower interface and proprietary carriage geometry isolated from the toolhead hardware.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/cad/printer/m3id-mount-bottom-iso.png" alt="Bottom isometric view of M3ID printer adapter mount"><figcaption>Adapter geometry with underside access, bolt patterns, and carriage registration features visible.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/cad/printer/m3id-mount-side.png" alt="Side profile of M3ID printer adapter mount"><figcaption>Side profile of the mount and cooling duct envelope before toolhead components are installed.</figcaption></figure>
+      </div>
+      <div class="section-head source-note">
+        <p class="eyebrow">Physical retrofit</p>
+        <h2>The CAD package was installed on the real printer carriage.</h2>
+        <p>The hardware photos connect the rendered design to the built machine: the modified right extruder rides on the same rail as the stock left extruder, while the green printed adapter carries the replacement toolhead, blower, wiring, and filament path.</p>
+      </div>
+      <div class="grid-2 source-note">
+        <figure class="media-contain"><img src="assets/cad/printer/physical/m3id-carriage-compare-left-right.jpg" alt="Physical M3ID carriage with stock left extruder and modified right extruder"><figcaption>Stock left extruder and modified right extruder on the same M3ID carriage, showing the retrofit as a machine-level integration rather than an isolated CAD part.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/cad/printer/physical/m3id-retrofit-isometric-side.jpg" alt="Isometric side photo of the M3ID right extruder retrofit"><figcaption>Physical side view of the installed adapter, replacement extruder, blower package, wiring clearance, and filament feed path.</figcaption></figure>
+      </div>
+      <div class="grid-2 source-note">
+        <figure class="media-contain"><img src="assets/cad/printer/physical/m3id-retrofit-top-view.jpg" alt="Top photo of the M3ID printer retrofit"><figcaption>Top view showing fastener access, carriage interface, and how the adapter packages around the existing rail and belt path.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/cad/printer/physical/m3id-retrofit-front-view.jpg" alt="Front photo of the M3ID right extruder retrofit"><figcaption>Front view of the physical toolhead stack, including heater wiring, controller board, printed adapter, and cooling hardware.</figcaption></figure>
+      </div>
+    </section>
+    <section class="section">
+      <div class="section-head"><h2>Printable FDM geometry</h2><p>A compact product-style CAD exercise focused on printable geometry, transitions, and packaging views.</p></div>
+      <div class="grid-3">
+        <figure class="media-fill"><img src="assets/cad/earprotection-isometric.png" alt="FDM CAD redesign isometric"><figcaption>Isometric CAD view.</figcaption></figure>
+        <figure class="media-fill"><img src="assets/cad/earprotection-side.png" alt="FDM CAD redesign side view"><figcaption>Side profile and printable transitions.</figcaption></figure>
+        <figure class="media-fill"><img src="assets/cad/earprotection-line.png" alt="FDM CAD redesign line view"><figcaption>Hidden geometry and packaging view.</figcaption></figure>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>

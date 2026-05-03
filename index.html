@@ -1,0 +1,180 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elisha Lerner | Mechatronics Portfolio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <nav class="nav">
+      <a class="brand" href="index.html">Elisha Lerner</a>
+      <div class="links">
+        <a href="hand.html">Robotic Hand</a>
+        <a href="software.html">Software</a>
+        <a href="controls.html">Controls</a>
+        <a href="modular-origami.html">Origami Systems</a>
+        <a href="smp-origami-tca.html">SMP/VSJ</a>
+        <a href="amphibious.html">Amphibious Robot</a>
+        <a href="cad.html">CAD</a>
+        
+      </div>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <video src="assets/hand/free-space-step.mp4" autoplay loop muted playsinline poster="assets/hand/free-space-step-preview.png"></video>
+    <div class="hero-content">
+      <p class="eyebrow">Robotics R&amp;D / Mechatronics Portfolio</p>
+      <h1>Robotic systems built from mechanism concept to validated hardware.</h1>
+      <p class="lede">I am finishing my PhD in summer 2026 and preparing for industry robotics R&amp;D roles. My work spans compliant mechanisms, variable-stiffness robots, embedded control, CAD, Simulink/MuJoCo workflows, and hardware validation, with projects that show academic research translated into working mechatronic systems.</p>
+      <div class="hero-proof">
+        <div class="proof-item"><strong>8 years</strong><span>SolidWorks, mechanism design, fabrication, and prototype iteration</span></div>
+        <div class="proof-item"><strong>5+ systems</strong><span>custom robotic platforms designed, integrated, and tested</span></div>
+        <div class="proof-item"><strong>4 controllers</strong><span>Python, MATLAB/Simulink, and C++ for hardware-facing control</span></div>
+        <div class="proof-item"><strong>Systems work</strong><span>mechanisms, controls, sensing, embedded systems, and validation</span></div>
+      </div>
+      <div class="actions">
+        <a class="button primary" href="hand.html">Flagship case study</a>
+
+        <a class="button" href="#projects">Browse projects</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="summary-band">
+    <div class="shell">
+      <p><strong>Selected projects show how I design mechanisms, build prototypes, write control code, and validate robot behavior.</strong></p>
+    </div>
+  </section>
+
+  <main class="shell">
+    <section class="section">
+      <div class="role-strip">
+        <div><strong>Mechanical design</strong><span>compliant mechanisms, CAD assemblies, packaging, tolerance-aware prototypes, and FDM process constraints</span></div>
+        <div><strong>Simulink and controls</strong><span>Simulink models, MATLAB scripts, MuJoCo TCP integration, PID tuning, and plant/controller structure</span></div>
+        <div><strong>Embedded systems</strong><span>servo buses, BLE control, encoder motors, thermal loops, sensor feedback, and scripted test routines</span></div>
+        <div><strong>Validation</strong><span>force tests, locomotion and grasping demos, current limits, field transitions, evidence maps, and peer-reviewed publications</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Featured case study</p>
+        <h2>mk19 robotic hand: mechanism, controls, and validation in one system.</h2>
+        <p>My flagship project is a linkage-driven compliant hand that uses a buckling drive joint to create contact-triggered distal motion. The case study shows mechanism reasoning, Simulink/MuJoCo control workflow, Python servo tooling, early hardware validation, and a clear path toward co-optimization with reinforcement learning and variable-stiffness integration.</p>
+      </div>
+      <div class="lead-case">
+        <div class="lead-copy">
+          <div class="grid-2">
+            <div class="metric"><strong>3 motors</strong><span>Compliant mechanics create useful contact behavior with modest actuation</span></div>
+            <div class="metric"><strong>MuJoCo</strong><span>Hand behavior and object contacts approximated with MuJoCo simulation</span></div>
+            <div class="metric"><strong>FDM</strong><span>All actuation paths and compliant components can be FDM printed as a monolithic piece.</span></div>
+            <div class="metric"><strong>TCP bridge</strong><span>Simulink commands Python/MuJoCo plant server through a reusable boundary</span></div>
+          </div>
+          <ul class="timeline">
+            <li><strong>Mechanism:</strong> sliding drive joint, buckling driving joint, distal wrap after proximal blockage, and a reserved stiffness channel for later VSJ work.</li>
+            <li><strong>Controls:</strong> current-limited PID tuning separates free-space bending from contact/grasp authority.</li>
+            <li><strong>Verification:</strong> plots and media document bend target, torque/current sweep, free-space response, and proximal-blocked compliant motion.</li>
+          </ul>
+          <div class="evidence-links">
+            <a class="button primary" href="hand.html">Open hand case study</a>
+            <a class="button" href="software.html">See controller details</a>
+            <a class="button" href="roadmap.html">Project index</a>
+          </div>
+        </div>
+        <figure class="wide-media">
+          <img src="assets/hand/system-architecture.png" alt="Simulation-to-real robotic hand workflow">
+          <figcaption>Simulation-to-real architecture: Simulink tuning surface, Python bridge, MuJoCo plant now, and hardware telemetry later.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="projects">
+      <div class="section-head">
+        <p class="eyebrow">Selected systems</p>
+        <h2>Selected robotics, mechanisms, controls, and hardware projects.</h2>
+      </div>
+      <div class="project-grid">
+        <article class="project-card featured">
+          <img src="assets/hand/free-space-step-preview.png" alt="mk19 robotic hand simulation">
+          <div>
+            <p class="eyebrow">Robotic hand</p>
+            <h3>Monolithic FDM-compatible compliant hand</h3>
+            <p>Multi-material print-compatible mechanism design, actuator-limit reasoning, Simulink/MuJoCo control interface, Feetech current constraints, and early bench validation.</p>
+            <a class="button primary" href="hand.html">View case study</a>
+          </div>
+        </article>
+        <article class="project-card">
+          <img src="assets/papers/amphibious_extra/swim-to-walk-overlay.png" alt="Amphibious robot swimming to walking transition overlay">
+          <div>
+            <h3>Embedded shape-morphing amphibious robot</h3>
+            <p>Nature Communications robot integrating waterproof packaging, rotating morphing legs, power transfer, BLE routines, and indoor/outdoor land-water testing.</p>
+            <a class="button" href="amphibious.html">View case study</a>
+          </div>
+        </article>
+        <article class="project-card">
+          <img src="assets/papers/modular_vsi/system-overview.png" alt="Modular origami robot">
+          <div>
+            <h3>Modular variable-stiffness origami robot</h3>
+            <p>Printed soft-rigid origami platform with stiffness inserts, tendon control, PID heater loops, grasping, and gait switching.</p>
+            <a class="button" href="modular-origami.html">View case study</a>
+          </div>
+        </article>
+        <article class="project-card">
+          <img src="assets/papers/tca_extra/exploded-tca-origami.png" alt="Exploded TCA-driven SMP origami module">
+          <div>
+            <h3>SMP, TCA, and composite VSJ robot line</h3>
+            <p>Three-stage development path from origami actuation precursor to TCA-driven SMP surface to motor-driven composite variable-stiffness robot.</p>
+            <a class="button" href="smp-origami-tca.html">View case study</a>
+          </div>
+        </article>
+        <article class="project-card">
+          <img src="assets/supporting/GripperHoldingGlue.png" alt="Compliant SMP gripper">
+          <div>
+            <h3>Variable-stiffness bistable SMP gripper</h3>
+            <p>6.8 g gripper with embedded heating, passive closure, motor reset, measured holding force, and mechanism-level validation.</p>
+            <a class="button" href="smp-gripper.html">View case study</a>
+          </div>
+        </article>
+        <article class="project-card">
+          <img src="assets/hand/system-architecture.png" alt="Software and controls architecture">
+          <div>
+            <h3>Embedded software and controls evidence</h3>
+            <p>Python Feetech bus control, ESP32 Bluetooth gait control, Arduino Mega thermal VSJ control, and Arduino MKR BLE amphibious firmware.</p>
+            <a class="button" href="software.html">View software evidence</a>
+          </div>
+        </article>
+        <article class="project-card">
+          <img src="assets/simulink/full-architecture.png" alt="Simulink actuator control architecture">
+          <div>
+            <h3>Simulink motion-control models</h3>
+            <p>Standalone actuator model, PID disturbance response, MATLAB figure generation, and the Simulink-to-MuJoCo hand tuning workflow.</p>
+            <a class="button" href="controls.html">Open controls page</a>
+          </div>
+        </article>
+        <article class="project-card">
+          <img src="assets/cad/printer/m3id-smart-orbit-assembly.png" alt="M3ID printer retrofit CAD assembly">
+          <div>
+            <h3>CAD, mechanisms, and printer retrofit</h3>
+            <p>Mechanism reasoning, FDM geometry, right-extruder Smart Orbiter retrofit, carriage packaging, cooling duct, and custom Klipper startup logic.</p>
+            <a class="button" href="cad.html">View CAD evidence</a>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <section class="summary-band">
+    <div class="shell">
+      <p><strong>Available for robotics R&amp;D, mechatronics, and hardware-focused engineering roles after PhD completion in summer 2026.</strong></p>
+      <a class="button primary" href="roadmap.html">Project index</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="shell">Elisha Lerner | Robotics, mechatronics, mechanisms, controls, and hardware validation.</div>
+  </footer>
+</body>
+</html>

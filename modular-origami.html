@@ -1,0 +1,190 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Modular Origami Robot | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Modular origami robotics</p><h1>Modular multimaterial origami robots: precursor locking work to active stiffness inserts.</h1><p>This work links an unpublished precursor project to the peer-reviewed modular stiffness origami paper. The precursor established the printed PLA/TPU Yoshimura module with manual locking inserts, force characterization, grasping, and locomotion; the published system extends that architecture with fixed stiffness inserts and thermally controlled variable-stiffness inserts for on-demand grasping and gait reconfiguration.</p></div></section>
+  <main class="shell">
+    <section class="section tight">
+      <div class="case-snapshot">
+        <div>
+          <p class="snapshot-label">What this page covers</p>
+          <h3>Printed origami mechanisms with programmable stiffness.</h3>
+          <p>The project sequence shows how I use printed origami geometry, tendon routing, and joint stiffness to change motion, grasping, and locomotion across both precursor hardware and the later modular stiffness-insert robot.</p>
+        </div>
+        <ul>
+          <li><strong>Precursor:</strong> PLA/TPU Yoshimura modules with manual locking inserts and force characterization.</li>
+          <li><strong>Published extension:</strong> fixed and variable-stiffness inserts used to redistribute bending in the same printed origami body.</li>
+          <li><strong>Robot behavior:</strong> grasping, locomotion, gait switching, encoder cable motors, PID heater loops, and ESP32 control code.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid-3">
+        <div class="panel"><h3>Precursor work</h3><p>Multimaterial 3D-printed origami with selective locking joints, proving programmable motion under one cable-driven actuator.</p></div>
+        <div class="panel"><h3>Peer-reviewed paper</h3><p>Modular stiffness-programmable origami with locking inserts, fixed stiffness inserts, and active SMP/PVC/SMP variable-stiffness inserts.</p></div>
+        <div class="panel"><h3>Mechatronics scope</h3><p>CAD, multimaterial FDM, tendon routing, motorized cable control, stiffness tuning, modeling, and robot-level validation.</p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid-4">
+        <div class="metric"><strong>12 joints</strong><span>modified Yoshimura precursor pattern</span></div>
+        <div class="metric"><strong>3 insert modes</strong><span>lock, passive stiffness, active variable stiffness</span></div>
+        <div class="metric"><strong>2.7e-2 to 0.71e-2</strong><span>Nm/rad VSI stiffness range when heated</span></div>
+        <div class="metric"><strong>~74%</strong><span>measured reduction from cold to hot VSI</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Selective locking precursor</p>
+        <h2>Multimaterial 3D-printed origami with programmable motion.</h2>
+        <p>The precursor project established the modular-origami engineering base: a modified Yoshimura pattern, 12 joints, 8 functional bending joints, PLA faces, 85A TPU hinges, and locking inserts that select different motion paths under the same cable actuation.</p>
+      </div>
+      <div class="project-detail">
+        <figure class="media-contain"><img src="assets/papers/origami/Robot Design.png" alt="Modified Yoshimura origami robot design"><figcaption>Robot architecture: modified Yoshimura pattern, cable routing, and major components.</figcaption></figure>
+        <div>
+          <ul class="fact-list">
+            <li><strong>Unit geometry:</strong> each isosceles right triangular face uses 26 mm legs, 2.5 mm rigid thickness, and a 3 mm soft-joint gap to allow near-flat folding while limiting torsion.</li>
+            <li><strong>Fabrication:</strong> directly printed as a multimaterial FDM structure on a Prusa XL using PLA rigid faces, 85A TPU joints, 0.15 mm layers, and gyroid infill.</li>
+            <li><strong>Origami architecture:</strong> 12-joint modified Yoshimura pattern with 12 triangular plates; H1-H4 and D3-D6 functionally affect bending.</li>
+            <li><strong>Actuation:</strong> one cable routed through four heat-inserted eye-hook guides, driven by Pololu DC motor spoolers.</li>
+            <li><strong>Control hardware:</strong> Raspberry Pi Pico, Pololu dual motor driver, and micrometal gearmotor encoders controlled cable length.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>Programmable motion and force characterization</h2><p>The precursor force tests turn visual reconfiguration into measured behavior. Different locking patterns do not just change the robot's shape; they change how much cable force is required and where the structure stores elastic energy.</p></div>
+      <div class="grid-3">
+        <div class="panel"><h3>Single actuator, multiple motions</h3><p>Five locking patterns produced horizontal bending, finger-like two-joint bending, diagonal twisting, partial folding, and full folding under the same cable pull.</p></div>
+        <div class="panel"><h3>Stiffness affects force budget</h3><p>Single-joint horizontal bending required more force than distributing the motion across paired horizontal joints, showing why insert selection matters for actuator sizing.</p></div>
+        <div class="panel"><h3>Unlocked joints can help</h3><p>In diagonal folding tests, adding an extra unlocked joint lowered the force required for large cable displacement because the structure could collapse through a more compliant path.</p></div>
+      </div>
+      <div class="grid-2">
+        <figure class="media-contain"><img src="assets/papers/origami/Single Unit Design.png" alt="Single origami unit design"><figcaption>Single unit design: embedded soft joint inside rigid faces for robust multimaterial printing.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/origami/Programmable Motions.png" alt="Programmable origami motions"><figcaption>Five programmable motions created by locking different joint sets.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/origami/Force Testing Setup.png" alt="Origami force testing setup"><figcaption>Force testing setup using Mark-10 test stand and force gauge to pull the cable.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/origami/Force Testing.png" alt="Origami force testing results"><figcaption>Force-displacement results showing how unlocked-joint count and motion complexity affect actuation force.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>Grasping and locomotion from the same modules</h2><p>The selective-locking work established a modular structure that can be biased toward grasping, folding, twisting, forward locomotion, or turning. Fully unlocked modules conform around compliant or curved objects; locked patterns add the geometry needed for scooping, box compression, pincer grasping, and directional gait bias.</p></div>
+      <div class="grid-3">
+        <figure class="media-contain"><img src="assets/papers/origami/Gripping without locking.png" alt="Gripping without locking"><figcaption>Fully unlocked grasping: glue sticks, a drone frame, and tape succeed; heat gun, box, and narrow rod reveal where programmable stiffness is needed.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/origami/Gripping with locking.png" alt="Gripping with locking"><figcaption>Locked-joint grasping: H1/H4 scoops under the heat gun, H1/D3/D4 folds over the box, and H4 produces a close pincer for the rod.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/origami/Locomotion.png" alt="Origami locomotion gaits"><figcaption>Forward and turning locomotion from different locking patterns on the same two-module robot.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Modular origami paper</p>
+        <h2>Stiffness inserts turn manual locking into a modular control architecture.</h2>
+        <p>The peer-reviewed paper keeps the multimaterial printed origami foundation but makes stiffness a swappable and controllable subsystem. The same joint can be locked, discretely tuned with an FSI, or thermally softened with a VSI, creating a robot platform with repeatable mechanical states.</p>
+      </div>
+      <div class="project-detail">
+        <figure class="media-contain"><img src="assets/papers/modular_vsi/system-overview.png" alt="Modular origami robot with stiffness inserts"><figcaption>System overview: soft-rigid printed unit, stiffness inserts, tendon-driven motions, three-finger robot, grasping, and locomotion.</figcaption></figure>
+        <div>
+          <ul class="fact-list">
+            <li><strong>Base unit:</strong> PETG rigid panels and TPU compliant joints form a soft-rigid printed origami structure.</li>
+            <li><strong>Locking insert:</strong> PLA insert prevents bending between adjacent rigid faces.</li>
+            <li><strong>Fixed stiffness insert:</strong> TPU layer sandwiched between PLA plates; TPU thickness programs discrete stiffness levels.</li>
+            <li><strong>Variable stiffness insert:</strong> SMP-PVC-SMP sandwich with embedded thermistor and resistive heating wire for closed-loop thermal stiffness control.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Model validation and stiffness-programmed behavior.</h2>
+        <p>The peer-reviewed paper adds a model of tendon-driven bending using torsional spring mechanics and cable tension analysis, then validates it against measured joint angles. Insert stiffness redistributes bending across the same printed body and the same tendon route.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><h3>Localized bend</h3><p>With one horizontal joint left compliant and a neighboring joint stiffened, bending concentrates at the compliant joint.</p></div>
+        <div class="panel"><h3>Shared bend</h3><p>Adding intermediate stiffness redistributes the same tendon motion across multiple joints instead of forcing one crease to absorb most of the motion.</p></div>
+        <div class="panel"><h3>Twist versus curl</h3><p>Changing the relative stiffness of horizontal and diagonal joints switches the finger between splaying, twisting, and curling behaviors for grasping.</p></div>
+      </div>
+      <div class="grid-2">
+        <figure class="media-contain"><img src="assets/papers/modular_vsi/model-validation.png" alt="Model validation for stiffness programmed origami"><figcaption>Model validation: stiffness patterns shift bending between H1, H3, and D2 under the same tendon displacement.</figcaption></figure>
+        <div class="panel">
+          <h3>Why it matters</h3>
+          <p>These tests frame the robot as a controllable mechanism. Insert selection changes the motion path without changing the motor, cable routing, or printed base structure.</p>
+          <p>The model also identifies a real design constraint: tendon friction and tension-ratio assumptions become important when multiple joints bend by similar amounts.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Three-finger grasping and VSI-enabled reconfiguration.</h2>
+        <p>The modular robot uses three origami fingers arranged around a compliant TPU palm. Each finger is driven by a geared DC motor with an integrated encoder, while MOSFET drivers and PID temperature control set VSI stiffness. The main result is object-specific grasping from the same finger geometry.</p>
+      </div>
+      <div class="grid-4">
+        <div class="metric"><strong>3</strong><span>origami fingers around a TPU palm</span></div>
+        <div class="metric"><strong>5 objects</strong><span>shown with fixed stiffness insert patterns</span></div>
+        <div class="metric"><strong>heated VSI</strong><span>changes grasp behavior without rebuilding fingers</span></div>
+        <div class="metric"><strong>closed loop</strong><span>encoder cable control plus PID heater control</span></div>
+      </div>
+      <div class="grid-2">
+        <figure class="media-contain"><img src="assets/papers/modular_vsi/fixed-insert-grasping.png" alt="Fixed insert grasping demonstrations"><figcaption>FSI grasping: stiffness patterns are selected for paper towel, wire spool, ball, strawberry, and spray bottle geometries.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/modular_vsi/vsi-grasping.png" alt="Variable stiffness insert grasping demonstrations"><figcaption>VSI grasping: heating active inserts changes which objects can be grasped without rebuilding the robot.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Locomotion: crawling, crutching, and active gait switching.</h2>
+        <p>The same origami fingers are reused as legs. Fixed insert patterns define a lower crawling gait and a taller crutching gait, while heating a VSI switches the body into a lower posture for gap traversal.</p>
+      </div>
+      <div class="grid-4">
+        <div class="metric"><strong>crawl</strong><span>lower profile for constrained traversal</span></div>
+        <div class="metric"><strong>crutch</strong><span>larger step length with higher body posture</span></div>
+        <div class="metric"><strong>80 vs 120 mm</strong><span>representative crawl/crutch body heights</span></div>
+        <div class="metric"><strong>VSI switch</strong><span>heated insert changes gait posture on demand</span></div>
+      </div>
+      <div class="grid-2">
+        <figure class="media-contain"><img src="assets/papers/modular_vsi/locomotion-gaits.png" alt="Crawling and crutching gait results"><figcaption>Locomotion comparison: crawling is lower and slower; crutching is taller and moves farther per cycle.</figcaption></figure>
+        <figure class="media-contain"><img src="assets/papers/modular_vsi/vsi-gait-switch.png" alt="VSI gait switching demonstration"><figcaption>VSI gait switch: heating the active insert lowers the body from crutching posture into a crawling configuration that clears a gap.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Embedded controller</p>
+        <h2>ESP32 Bluetooth C++ runs wireless gait and heater control.</h2>
+        <p>The ESP32 code demonstrates remote gait selection, encoder-based cable positioning, and closed-loop heater control around a real tendon-driven origami mechanism.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><h3>Command layer</h3><p>Bluetooth commands select SHIMMY, CRUTCH, CRAWL, STOP, or numeric arrays for cable targets and heater setpoints.</p></div>
+        <div class="panel"><h3>Actuator layer</h3><p>Three motors use encoder feedback, LEDC PWM, phase control, millimeter-to-count conversion, and deadbanded target seeking.</p></div>
+        <div class="panel"><h3>Thermal layer</h3><p>Two thermistors feed beta-model temperature estimates and PID outputs for active VSI heater PWM.</p></div>
+      </div>
+      <p class="source-note"><a class="button" href="software.html">Open controller overview</a> <a class="button" href="code-modular-origami.html">View ESP32 source</a></p>
+    </section>
+
+    <section class="section grid-2">
+      <figure class="media-fill"><img src="assets/supporting/VariableSTiff_RobotDesign.PNG" alt="Variable stiffness origami robot"><figcaption>Supplemental robot architecture view from the modular stiffness-insert work.</figcaption></figure>
+      <figure class="media-fill"><img src="assets/supporting/VariableStiff_WorkingPriciple.png" alt="Variable stiffness working principle"><figcaption>Working principle for insert-controlled stiffness behavior.</figcaption></figure>
+      <figure class="media-fill"><img src="assets/supporting/VariableSTiff_CrawlingLoco.gif" alt="Crawling locomotion"><figcaption>Animated crawling validation showing functional reconfiguration.</figcaption></figure>
+      <div class="panel">
+        <h3>What this demonstrates</h3>
+        <p>This project now reads as a printed-origami mechanism family: manual locks establish programmable motion, FSIs add calibrated passive stiffness, and VSIs add active thermal stiffness control.</p>
+        <p>The composite SMP variable-stiffness robot is split into its own page because it uses a different body material and stiffness-control strategy, even though it shares the origami structure lineage.</p>
+        <p><a class="button" href="smp-origami-tca.html">Open composite SMP/VSJ project</a></p>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>

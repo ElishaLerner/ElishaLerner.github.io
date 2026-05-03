@@ -1,0 +1,31 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Index | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Project index</p><h1>Mechanisms, controls, and robot tests at a glance.</h1><p>A compact guide to the robotic hand, variable-stiffness origami systems, amphibious robot, printer retrofit, and embedded controllers.</p></div></section>
+  <main class="shell">
+    <section class="section">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>System</th><th>Hardware / software</th><th>Engineering content</th><th>Open</th></tr></thead>
+          <tbody>
+            <tr><td>mk19 robotic hand</td><td>Free-space bend limit, torque/current sweep, controller tuning plot, and proximal-blocked contact media.</td><td>Connects compliant mechanism behavior, physical stops, actuator limits, contact response, and Simulink/MuJoCo tuning.</td><td><a href="hand.html">Hand</a></td></tr>
+            <tr><td>OriHand controller</td><td>Python Feetech HLS controller for URT-2 serial bus testing.</td><td>Shows packet-level hardware control, current-limited motion, live servo telemetry, ID management, GUI controls, CLI tools, and saved sequences.</td><td><a href="code-orihand.html">Source</a></td></tr>
+            <tr><td>TCA and SMP origami robots</td><td>Early origami actuation precursor, Nature Communications TCA-driven SMP surface, and Philosophical Transactions motor-driven PETG/SMP composite VSJ robot.</td><td>Shows a clear development path from actuator/material exploration to measured variable-stiffness joints, embedded thermal control, locomotion, and adaptive grasping.</td><td><a href="smp-origami-tca.html">Project</a></td></tr>
+            <tr><td>Modular origami robot</td><td>ESP32 Bluetooth firmware, active VSIs, encoder cable control, grasping figures, and gait switching.</td><td>Demonstrates wireless mode control, closed-loop motor targets, PID heater control, and object-specific stiffness tuning.</td><td><a href="modular-origami.html">Project</a></td></tr>
+            <tr><td>SMART amphibious robot</td><td>Nature Communications robot with waterproof body, rotating morphing legs, slip rings, BLE firmware, tank tests, and outdoor river transition GIFs.</td><td>Demonstrates full robot integration across packaging, environmental sealing, power transfer, embedded control, thermal morphing, and land/water validation.</td><td><a href="amphibious.html">Project</a></td></tr>
+            <tr><td>M3ID printer retrofit</td><td>Right-extruder Smart Orbiter mount, cooling duct, proprietary carriage adaptation, Klipper conversion, and custom start G-code.</td><td>Shows practical machine retrofit work across CAD packaging, toolhead clearance, dual-extruder startup, purge/wipe logic, and slicer-to-firmware integration.</td><td><a href="cad.html">CAD</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>

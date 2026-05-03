@@ -1,0 +1,103 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>M3ID Custom Start G-code | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Source Code</p><h1>M3ID Custom Start G-code</h1><p>Custom Klipper startup logic for a modified dual-extruder M3ID printer, including bed selection, coordinated hotend preparation, purge/wipe paths, tool parking, and slicer-variable integration.</p><div class="actions"><a class="button primary" href="assets/cad/printer/m3id-custom-start.gcode">Open raw file</a><a class="button" href="cad.html">Back to CAD</a></div></div></section>
+  <main class="shell">
+    <section class="section">
+      <pre class="code-view"><code class="language-gcode">G90
+G28
+
+TYPE{filament_type[0]}1
+TYPE{filament_type[1]}2
+
+{if bed_temperature[0] &lt; bed_temperature[1]}
+BED_MESH_PROFILE LOAD=65deg
+M140 S{first_layer_bed_temperature[1]}
+M190 S{first_layer_bed_temperature[1]}
+{endif}
+
+{if bed_temperature[0] &gt; bed_temperature[1]}
+BED_MESH_PROFILE LOAD=65deg
+M140 S{first_layer_bed_temperature[0]}
+M190 S{first_layer_bed_temperature[0]}
+{endif}
+
+{if bed_temperature[0] == bed_temperature[1]}
+BED_MESH_PROFILE LOAD=65deg
+M140 S{first_layer_bed_temperature[0]}
+M190 S{first_layer_bed_temperature[0]}
+{endif}
+
+; Set hotend temperature
+M104 T0 S{first_layer_temperature[0]}
+M104 T1 S{first_layer_temperature[1]}
+
+; Wait for hotends to reach temperature
+M109 T0 S{first_layer_temperature[0]}
+M109 T1 S{first_layer_temperature[1]}
+
+{if temperature[0] &gt; 0}
+T0;
+M221 S70        ; slow extrusion flow
+G92 E0; zero extruder
+G1 Z10; lift
+G1 X100 Y229 F10000; move to unused back edge
+G1 Z0.30 F1000
+G1 X20 E9.25 F1000; deposit extrusion line
+G1 Y230 E9.45 F1000; move and extrude y
+G1 X70 E17.05; deposit extrusion line
+G1 X100 Z0.05 F1000; wipe off tail
+PARK_extruder
+G92 E0; zero extruder
+M221 S100       ; restore normal flow
+{endif}
+
+{if temperature[1] &gt; 0}
+T1; switch to left extruder
+M221 S40        ; slow extrusion flow
+G1 X215 Y210 Z0.1 F10000; move off the bed and bring the bed up
+G92 E0; zero extruder
+G1 X195 Z0.1 F1000; scrape off any ooze
+G1 Z10; lift
+G1 X100 Y227 F10000; move to unused back edge
+G1 Z0.30 F1000
+G1 X180 E9.25 F1000; deposit extrusion line
+G1 Y227 E9.45 F1000; move and extrude y
+G1 X130 E17.05; deposit extrusion line
+G1 X100 Z0.05 F1000; wipe off tail
+PARK_extruder1
+G92 E0; zero extruder
+M221 S100       ; restore normal flow
+T0;
+{endif}
+
+{if ooze_prevention == true}
+{if initial_extruder == 1}
+M104 T0 S{first_layer_temperature[0]+standby_temperature_delta}
+{endif}
+{if initial_extruder == 0}
+M104 T1 S{first_layer_temperature[1]+standby_temperature_delta}
+{endif}
+{endif}
+
+G28 X; home tools
+T0;
+G21; set units to millimeters
+G90; use absolute coordinates
+M83; use relative distances for extrusion
+
+T0;
+</code></pre>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>
+

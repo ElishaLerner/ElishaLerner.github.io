@@ -1,0 +1,132 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Software and Embedded Controls | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><nav class="nav"><a class="brand" href="index.html">Elisha Lerner</a><div class="links"><a href="hand.html">Robotic Hand</a><a href="software.html">Software</a><a href="controls.html">Controls</a><a href="modular-origami.html">Origami Systems</a><a href="smp-origami-tca.html">SMP/VSJ</a><a href="amphibious.html">Amphibious Robot</a><a href="cad.html">CAD</a></div></nav></header>
+  <section class="page-hero"><div class="shell"><p class="eyebrow">Embedded software</p><h1>Python and C++ controllers for physical robot hardware.</h1><p>These source files demonstrate hardware-facing control across PC-to-servo hand testing, ESP32 Bluetooth origami control, Arduino Mega VSJ thermal/mechanical control, and Arduino MKR BLE amphibious robot modes.</p></div></section>
+  <main class="shell">
+    <section class="section tight">
+      <div class="case-snapshot">
+        <div>
+          <p class="snapshot-label">What this page covers</p>
+          <h3>Control code used for hardware testing and robot demonstrations.</h3>
+          <p>The controller evidence shows how I move from mechanism concepts into repeatable hardware behavior: Feetech servo control, Bluetooth gait commands, thermal variable-stiffness joint control, and amphibious robot mode control.</p>
+        </div>
+        <ul>
+          <li><strong>Hand controller:</strong> PC-to-servo communication, current limits, live feedback, ID assignment, and scripted motion sequences.</li>
+          <li><strong>Origami controllers:</strong> encoder motors, Bluetooth commands, heater loops, thermistor feedback, relay isolation, and gait routines.</li>
+          <li><strong>Amphibious controller:</strong> BLE mode selection for walking, swimming, morphing, reheating, reset, and push-off behaviors.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid-4">
+        <div class="panel"><h3>OriHand Python</h3><p>Direct PC control of Feetech HLS servos through a URT-2 serial bus, with GUI, CLI, live feedback, current limits, and sequence planning.</p><p><a class="button" href="code-orihand.html">View Python source</a></p></div>
+        <div class="panel"><h3>ESP32 origami C++</h3><p>Bluetooth gait commands, encoder-based cable targets, three motor channels, and two PID heater loops for the modular stiffness-insert robot.</p><p><a class="button" href="code-modular-origami.html">View ESP32 source</a></p></div>
+        <div class="panel"><h3>Arduino Mega VSJ C++</h3><p>Eight heater channels, relay isolation, six thermistors, PID temperature control, two encoder motors, and gait command logic for the composite VSJ robot.</p><p><a class="button" href="code-smp-vsj.html">View Mega source</a></p></div>
+        <div class="panel"><h3>Arduino MKR amphibious C++</h3><p>BLE command interface for the Nature Communications robot, coordinating four encoded leg motors, heating, TCA actuation, morphing, swimming, walking, and push-off behaviors.</p><p><a class="button" href="code-amphibious.html">View MKR source</a></p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Controller map</p>
+        <h2>Each controller connects to a different piece of hardware.</h2>
+        <p>Each entry summarizes what the code reads, what it commands, and what physical behavior it makes repeatable.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Controller</th><th>Hardware connection</th><th>Signals handled</th><th>Hardware behavior</th></tr></thead>
+          <tbody>
+            <tr><td><a href="code-orihand.html">OriHand Python controller</a></td><td>PC to Feetech URT-2 serial bus to HLS servos.</td><td>Servo ID, target angle, speed, acceleration, current limit, live position, load, voltage, temperature, current raw.</td><td>Hardware-facing hand control with safe current-limited motion and repeatable scripted sequences.</td></tr>
+            <tr><td><a href="code-modular-origami.html">ESP32 modular origami firmware</a></td><td>Bluetooth command source to cable motors, encoders, and two VSI heaters.</td><td>Gait command, three cable targets, encoder positions, two temperature setpoints, PID heater PWM.</td><td>Wireless origami control is organized around gait modes and bounded actuator targets.</td></tr>
+            <tr><td><a href="code-smp-vsj.html">Arduino Mega VSJ firmware</a></td><td>Serial command source to thermal VSJs, relay isolation, and two cable motors.</td><td>Joint temperature setpoints, thermistor reads, PID duty cycles, relay states, gait state, encoder counts.</td><td>Embedded code coordinates material state and mechanism motion instead of treating heating as a side task.</td></tr>
+            <tr><td><a href="code-amphibious.html">Arduino MKR amphibious firmware</a></td><td>BLE characteristic writes to four leg motors, heaters, and TCA outputs.</td><td>BLE command value, encoder counts, motor PWM, phase pins, heating interval, morph/swim/walk routines.</td><td>System-level firmware turns a lab prototype into an untethered mode-switching robot.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Hand controller</p>
+        <h2>OriHand Python: direct Feetech URT-2 hardware control.</h2>
+        <p>The Python file is a standalone Feetech HLS controller for PC-side testing. It builds packets for the servo bus, discovers IDs, reads feedback, converts raw units into engineering units, limits current, and provides both a GUI and command-line interface.</p>
+      </div>
+      <div class="project-detail">
+        <figure class="media-contain"><img src="assets/hand/system-architecture.png" alt="Hand software architecture"><figcaption>Python hardware control complements the Simulink/MuJoCo workflow by exercising the real Feetech bus directly.</figcaption></figure>
+        <div>
+          <ul class="fact-list">
+            <li><strong>Bus layer:</strong> Feetech packet construction, checksum, little-endian register writes, signed value decoding, and status-packet parsing.</li>
+            <li><strong>Hardware safety:</strong> target clamp, speed and acceleration conversion, soft-home settings, torque enable/disable, and current-limit conversion from amps to raw command units.</li>
+            <li><strong>Reviewable tooling:</strong> serial-port scan, servo ID reassignment, live feedback display, discovered-servo commands, individual servo panels, CLI commands, and saved motion sequences.</li>
+            <li><strong>Hardware role:</strong> supports real hand bring-up through servo discovery, feedback inspection, current limits, and repeatable motion scripts.</li>
+          </ul>
+          <p class="source-note"><a class="button" href="code-orihand.html">View Python source</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Modular origami controller</p>
+        <h2>ESP32 Bluetooth C++: gait modes plus active VSI heating.</h2>
+        <p>The ESP32 firmware combines three encoder-controlled cable motors with two thermistor/PID heater channels. Bluetooth commands can start named gait demos or send raw target arrays for cable position and temperature setpoints.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><h3>Wireless interface</h3><p>Bluetooth device name Oribot2; commands include SHIMMY, CRUTCH, CRAWL, STOP, and space-separated numeric target arrays.</p></div>
+        <div class="panel"><h3>Motor layer</h3><p>Three cable motors use ESP32 LEDC PWM channels, encoder interrupts, millimeter-to-count conversion, directional phase signals, and deadbanded target seeking.</p></div>
+        <div class="panel"><h3>Thermal layer</h3><p>Two thermistors are converted through a beta model, then PID outputs drive MOSFET PWM channels with zero-setpoint heater shutdown.</p></div>
+      </div>
+      <p class="source-note"><a class="button" href="code-modular-origami.html">View ESP32 source</a></p>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Composite VSJ controller</p>
+        <h2>Arduino Mega C++: thermal state plus locomotion state.</h2>
+        <p>The Philosophical Transactions code coordinates two VSJ modules. It accepts serial commands for inch, undulate, turtle, reset, and manual motor setting; maps those commands into joint temperature setpoints; isolates unused heaters with relays; and runs the motor sequence only after the thermal state is ready.</p>
+      </div>
+      <div class="project-detail">
+        <figure class="media-contain"><img src="assets/papers/smp_composite/image037.png" alt="Composite VSJ experimental setup"><figcaption>Controller code ties heater timing, temperature feedback, and robot demonstrations together.</figcaption></figure>
+        <div>
+          <ul class="fact-list">
+            <li><strong>Thermal control:</strong> six thermistor inputs are averaged and converted to temperature for eight PID heater outputs.</li>
+            <li><strong>Electrical protection:</strong> eight relay channels disconnect inactive heaters; the code explicitly blocks simultaneous activation of opposing diagonal heaters on the same module.</li>
+            <li><strong>Locomotion logic:</strong> encoder-based stages drive two cable motors through inchworm, undulation, and turtle-style gait cycles.</li>
+            <li><strong>Hardware role:</strong> coordinates material stiffness, circuit state, and mechanism motion in one controller.</li>
+          </ul>
+          <p class="source-note"><a class="button" href="code-smp-vsj.html">View Arduino Mega source</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Amphibious robot controller</p>
+        <h2>Arduino MKR BLE C++: untethered mode control for the Nature Communications robot.</h2>
+        <p>The amphibious firmware exposes a BLE command service for the SMART prototype and maps characteristic values to physical robot modes: terrestrial movement, swimming gait, morphing, reheating, encoder reset, leg heating for swimming, and push-off.</p>
+      </div>
+      <div class="project-detail">
+        <figure class="media-contain"><img src="assets/supporting/Amphibios_BlockDiagram.png" alt="Amphibious robot block diagram"><figcaption>BLE firmware sits at the system boundary between remote commands and the robot's morphing, walking, and swimming hardware.</figcaption></figure>
+        <div>
+          <ul class="fact-list">
+            <li><strong>Wireless interface:</strong> ArduinoBLE service and writable byte characteristic allow phone-based mode selection through LightBlue-style tools.</li>
+            <li><strong>Motor coordination:</strong> four encoded leg motors are driven through phase pins and PWM, with position loops that stop individual motors when targets are reached.</li>
+            <li><strong>Morphing sequence:</strong> routines coordinate heating, TCA power, leg motor motion, and reset behavior for land/water transition tasks.</li>
+            <li><strong>Hardware role:</strong> sequences a whole robot under untethered outdoor constraints, not just bench actuation.</li>
+          </ul>
+          <p class="source-note"><a class="button" href="code-amphibious.html">View Arduino MKR source</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>

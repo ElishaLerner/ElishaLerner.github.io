@@ -1,0 +1,201 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robotic Hand Case Study | Elisha Lerner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <nav class="nav">
+      <a class="brand" href="index.html">Elisha Lerner</a>
+      <div class="links">
+        <a href="hand.html">Robotic Hand</a>
+        <a href="software.html">Software</a>
+        <a href="controls.html">Controls</a>
+        <a href="modular-origami.html">Origami Systems</a>
+        <a href="smp-origami-tca.html">SMP/VSJ</a>
+        <a href="smp-gripper.html">SMP Gripper</a>
+        <a href="amphibious.html">Amphibious Robot</a>
+        <a href="cad.html">CAD</a>
+        
+      </div>
+    </nav>
+  </header>
+
+  <section class="page-hero">
+    <div class="shell">
+      <p class="eyebrow">Robotic hand</p>
+      <h1>mk19 robotic hand: monolithic FDM-compatible compliant mechanism, controls, and hardware testing.</h1>
+      <p>A fully 3D-printed hand concept designed around monolithic multi-material FDM manufacturing, with MuJoCo simulation, Simulink control, Feetech HL-3915-C001 current limits, contact-triggered distal motion, and bench validation on the current three-motor prototype.</p>
+    </div>
+  </section>
+
+  <main class="shell">
+    <section class="section tight">
+      <div class="case-snapshot">
+        <div>
+          <p class="snapshot-label">What this page covers</p>
+          <h3>My flagship compliant hand project.</h3>
+          <p>The evidence below traces the hand from mechanism concept into simulation, control, and bench testing: a monolithic multi-material FDM-compatible linkage, buckling joint concept, MuJoCo/Simulink control setup, current limits, contact behavior, and transfer path to physical hardware.</p>
+        </div>
+        <ul>
+          <li><strong>Manufacturing:</strong> actuation paths and compliant components are designed to be printed together as a monolithic multi-material FDM part.</li>
+          <li><strong>Mechanism:</strong> compliant linkage behavior, buckling drive joint, distal wrapping after proximal blockage, and a path toward variable-stiffness integration.</li>
+          <li><strong>Controls:</strong> Simulink commands a Python/MuJoCo plant through TCP, with the same command and telemetry concepts intended for Feetech hardware.</li>
+          <li><strong>Bench validation:</strong> printed three-motor hardware demos, simulation, controller plots, torque/current limits, proximal-blocked contact media, and related Python servo-control code.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid-4">
+        <div class="metric"><strong>FDM</strong><span>monolithic multi-material print-compatible mechanism</span></div>
+        <div class="metric"><strong>0.16 Nm</strong><span>selected low-current free-space motion limit</span></div>
+        <div class="metric"><strong>0.69 Nm</strong><span>estimated Feetech contact torque ceiling</span></div>
+        <div class="metric"><strong>0.75 A</strong><span>measured grasping current ceiling before voltage errors</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Early bench validation</p>
+        <h2>Early bench tests with the physical hand.</h2>
+        <p>These short clips show the current three-motor hand hardware interacting with everyday objects. They are early validation demos that connect the simulation and control work to the physical prototype while leaving formal performance characterization for the next test phase.</p>
+      </div>
+      <div class="grid-2">
+        <figure class="media-contain">
+          <video src="assets/hand/hardware/hardware-multimeter.mp4" poster="assets/hand/hardware/hardware-multimeter-poster.jpg" controls preload="metadata" playsinline></video>
+          <figcaption>Contact demo with a handheld multimeter.</figcaption>
+        </figure>
+        <figure class="media-contain">
+          <video src="assets/hand/hardware/hardware-box-of-tea.mp4" poster="assets/hand/hardware/hardware-box-of-tea-poster.jpg" controls preload="metadata" playsinline></video>
+          <figcaption>Interaction with a small rectangular tea box.</figcaption>
+        </figure>
+        <figure class="media-contain">
+          <video src="assets/hand/hardware/hardware-paper-roll.mp4" poster="assets/hand/hardware/hardware-paper-roll-poster.jpg" controls preload="metadata" playsinline></video>
+          <figcaption>Interaction with a light cylindrical paper roll.</figcaption>
+        </figure>
+        <figure class="media-contain">
+          <video src="assets/hand/hardware/hardware-dry-eraser.mp4" poster="assets/hand/hardware/hardware-dry-eraser-poster.jpg" controls preload="metadata" playsinline></video>
+          <figcaption>Interaction with a dry-erase eraser.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Architecture</p>
+        <h2>Simulink tunes the controller while MuJoCo acts as the plant.</h2>
+        <p>A TCP bridge keeps MATLAB, Python, and MuJoCo separated while preserving the same command/telemetry structure that a later hardware backend can use.</p>
+      </div>
+      <figure class="wide-media">
+        <img src="assets/hand/system-architecture.png" alt="System architecture for robotic hand control workflow">
+        <figcaption>One interface, two eventual backends: MuJoCo now, Feetech servo telemetry later.</figcaption>
+      </figure>
+      <div class="grid-3 section">
+        <div class="panel"><h3>Command inputs</h3><p>Target angle, PID gains, torque/current limit, scenario settings, and a reserved proximal-stiffness command channel.</p></div>
+        <div class="panel"><h3>Telemetry outputs</h3><p>Measured position, error, load proxy, estimated current, contact metrics, and pass/fail test files.</p></div>
+        <div class="panel"><h3>Transfer value</h3><p>The Simulink blocks become a real tuning surface once hardware position and current telemetry are connected.</p></div>
+      </div>
+      <p class="source-note"><a class="button" href="controls.html">Open Simulink controls details</a></p>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Mechanism design</p>
+        <h2>Sliding drive joint plus bending membrane, designed for monolithic FDM printing.</h2>
+        <p>The mk19 finger is treated as a printed compliant mechanism, not a rigid four-bar assembled from many discrete parts. The actuation path, compliant members, and flexural behavior are designed around a monolithic multi-material FDM print. A sliding drive joint handles servo disk eccentricity and tolerance stackup, while the bending membrane stores elastic energy and allows distal wrap after the proximal link is blocked.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Element</th><th>Mechanical function</th><th>Simulation representation</th><th>Test method</th></tr></thead>
+          <tbody>
+            <tr><td>Monolithic multi-material body</td><td>Combines rigid structure, compliant links, and actuation paths in an FDM-printable hand body.</td><td>Rigid and compliant sections are separated into simplified joints and stiffness elements.</td><td>Bench hardware demos show the printed hand interacting with everyday objects.</td></tr>
+            <tr><td>Servo disk</td><td>Converts Feetech servo rotation into linkage drive motion.</td><td>Torque-limited hinge with PID command.</td><td>Current-limited torque sweep and 90 degree bend characterization.</td></tr>
+            <tr><td>Sliding drive joint</td><td>Allows drive-bar translation so the servo disk does not over-constrain the linkage.</td><td>Low-friction slide joint in the drive path.</td><td>Free-space bend remains smooth before object-contact work.</td></tr>
+            <tr><td>Bending membrane</td><td>Transmits motion into the distal link after proximal blockage.</td><td>Compliant coupling stiffness around 0.022 N*m/rad.</td><td>Small-sphere proximal-block media shows distal continuation.</td></tr>
+            <tr><td>Proximal VSJ channel</td><td>Changes how readily the proximal link yields during object contact.</td><td>Reserved 1x to 4x distal flexure stiffness range in simulation.</td><td>Keeps stiffness-tuning experiments separate from the verified current-limited controller.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="source-note"><a class="button" href="roadmap.html">View project index</a></p>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Controls model</p>
+        <h2>Torque/current limits are part of the design, not an afterthought.</h2>
+      </div>
+      <div class="grid-2">
+        <figure class="wide-media"><img src="assets/hand/torque-limit-sweep.png" alt="Torque limit sweep"><figcaption>Current-limited torque sweep maps free-space motion authority and effort proxy.</figcaption></figure>
+        <figure class="wide-media"><img src="assets/hand/controller-tuning-comparison.png" alt="Controller tuning comparison"><figcaption>Retuned controller reaches the mk19 bend target while preserving separate contact-limit reasoning.</figcaption></figure>
+        <figure class="wide-media"><img src="assets/hand/free-space-vs-contact-limits.png" alt="Free-space versus contact limits"><figcaption>Free-space bending and grasp/contact limits are intentionally treated as different jobs.</figcaption></figure>
+        <figure class="wide-media"><img src="assets/hand/top-level-simulink.png" alt="Top-level Simulink hand controls"><figcaption>Simulink model exposes target, PID gains, torque/current limit, telemetry, and scopes.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Contact media</p>
+        <h2>Free-space motion versus proximal-blocked compliant motion.</h2>
+        <p>The goal is to show the core mechanism behavior: without an object, the finger follows the commanded bend path; with a sphere blocking the proximal link, distal motion continues through the compliant drive path.</p>
+      </div>
+      <div class="grid-2">
+        <figure>
+          <video src="assets/hand/free-space-proximal-block-reference-top.mp4" autoplay loop muted playsinline controls></video>
+          <figcaption>Free-space reference, top view, same finger family as the proximal-block study.</figcaption>
+        </figure>
+        <figure>
+          <video src="assets/hand/free-space-proximal-block-reference-side.mp4" autoplay loop muted playsinline controls></video>
+          <figcaption>Free-space reference, side/elevation view.</figcaption>
+        </figure>
+        <figure>
+          <video src="assets/hand/small-sphere-proximal-block-top.mp4" autoplay loop muted playsinline controls></video>
+          <figcaption>Small sphere proximal block, top view.</figcaption>
+        </figure>
+        <figure>
+          <video src="assets/hand/small-sphere-proximal-block-side.mp4" autoplay loop muted playsinline controls></video>
+          <figcaption>Small sphere proximal block, side/elevation view showing compliant distal continuation.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Verification snapshot</p>
+        <h2>Evidence map for the current hand workflow.</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Claim</th><th>Status</th><th>Evidence</th><th>Engineering value</th></tr></thead>
+          <tbody>
+            <tr><td>Simulink can command and tune the MuJoCo hand plant.</td><td><span class="status">Working</span></td><td>Top-level model, TCP bridge, response plots.</td><td>Shows a clean controller/plant boundary rather than a one-off animation.</td></tr>
+            <tr><td>Free-space bend target can be characterized and tuned.</td><td><span class="status">Working</span></td><td>90 deg bend target and torque sweep.</td><td>Turns mechanism limits into measurable requirements.</td></tr>
+            <tr><td>Proximal blockage changes motion path through compliance.</td><td><span class="status">Working</span></td><td>Manual object placement and top/side media.</td><td>Documents the distal-wrap behavior that makes the compliant finger interesting.</td></tr>
+            <tr><td>Current ceiling maps to practical torque authority.</td><td><span class="status">Working</span></td><td>0.75 A observed ceiling mapped to about 0.69 Nm.</td><td>Connects servo electrical limits to safe grasp-force reasoning.</td></tr>
+            <tr><td>Variable stiffness is isolated from the controller core.</td><td><span class="warning">Extension</span></td><td>Reserved stiffness channel and separate VSJ/RL experiment path.</td><td>Keeps advanced optimization separate from the verified current-limited controller.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <p class="eyebrow">Hardware controller</p>
+        <h2>OriHand Python controller brings the real Feetech bus into the workflow.</h2>
+        <p>The Python sample is a direct PC-to-URT-2 hardware controller for Feetech HLS servos. It complements the Simulink/MuJoCo work by supporting real servo discovery, position commands, current limits, live feedback, and scripted motion sequences.</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><h3>Bus interface</h3><p>Builds Feetech packets, checks status responses, writes registers, and decodes live position, voltage, temperature, load, and current.</p></div>
+        <div class="panel"><h3>Safe motion</h3><p>Converts degree, RPM, acceleration, and amp-level current limits into servo raw units with clamping and soft-home settings.</p></div>
+        <div class="panel"><h3>Hardware bring-up</h3><p>GUI panels, CLI commands, discovered-servo control, ID assignment, live feedback, and saved sequence playback support repeatable testing with the current three-motor setup.</p></div>
+      </div>
+      <p class="source-note"><a class="button" href="software.html">Open controller overview</a> <a class="button" href="code-orihand.html">View Python source</a></p>
+    </section>
+  </main>
+
+  <footer class="footer"><div class="shell"><a href="index.html">Back to projects</a></div></footer>
+</body>
+</html>
