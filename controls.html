@@ -21,7 +21,7 @@
         <div>
           <p class="snapshot-label">What this page covers</p>
           <h3>Simulink and model-based workflows are main engineering tools behind the hand work.</h3>
-          <p>The models here are not just screenshots. The portfolio includes the SLX Simulink model, MATLAB parameter file, and live-script figure generator for the standalone actuator-control project, plus selected coursework artifacts that show breadth in robot learning and dynamics.</p>
+          <p>The models here are not just screenshots. The portfolio includes the SLX Simulink model, MATLAB parameter file, and live-script figure generator for the standalone actuator-control project, plus selected coursework that show experience with robot learning and dynamics.</p>
         </div>
         <ul>
           <li><strong>Space actuator:</strong> a Simulink model of motor electrical dynamics, torque generation, plant motion, disturbance torque, and PID control.</li>
@@ -67,7 +67,7 @@
     <section class="section">
       <div class="section-head">
         <p class="eyebrow">Hand Simulink/MuJoCo workflow</p>
-        <h2>Simulink is the tuning surface for the robotic hand digital twin.</h2>
+        <h2>Simulink tuning for the Mujoco hand prior to physical implementation.</h2>
         <p>For the hand, Simulink sends target position, PID gains, and torque/current-limit commands to a Python MuJoCo plant server over TCP. MuJoCo returns measured position, tracking error, load proxy, and current/torque proxy telemetry so controller behavior can be tuned before hardware transfer.</p>
       </div>
       <div class="grid-2">
@@ -83,13 +83,13 @@
       <div class="section-head">
         <p class="eyebrow">Supplemental coursework evidence</p>
         <h2>Applied ML, reinforcement learning, and robot dynamics work that supports the controls story.</h2>
-        <p>These artifacts are selected from previous graduate coursework because they connect directly to robotics R&amp;D: collecting physical robot data, building learned predictors, setting up RL environments, and deriving dynamics for multi-link mechanisms.</p>
+        <p>These are selected from previous graduate coursework because they connect directly to robotics R&amp;D: collecting physical robot data, building learned predictors, setting up RL environments, and deriving dynamics for multi-link mechanisms.</p>
       </div>
       <div class="grid-3">
         <div class="panel">
-          <h3>Learned position prediction</h3>
-          <p>Adaptive-origami ML project using motion-capture data, heater voltage inputs, encoder-controlled cable actuation, and compact TensorFlow Lite regressors to predict the final 3D position of a variable-stiffness module.</p>
-          <p><a class="button" href="assets/coursework/source/ml-position-data.csv">Open data sample</a> <a class="button" href="assets/coursework/source/motion-capture-csv-reader.m">Open MATLAB reader</a></p>
+          <h3>Motion-tracking ML regression</h3>
+          <p>Adaptive-origami ML project using motion-capture endpoints, heater voltage inputs, encoder-controlled cable actuation, TensorFlow/Keras regressors, and TensorFlow Lite export for compact embedded prediction experiments.</p>
+          <p><a class="button" href="assets/coursework/source/motion-tracking-ml-colab-export.py">Open Python export</a> <a class="button" href="assets/coursework/source/ml-position-data.csv">Open data sample</a></p>
         </div>
         <div class="panel">
           <h3>Simulink RL environment</h3>

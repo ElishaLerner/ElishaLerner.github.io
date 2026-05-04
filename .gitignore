@@ -1,1 +1,5 @@
 _verification/
+__pycache__/
+*.pyc
+assets/coursework/source/motion-tracking-ml-regression.py
+assets/coursework/source/motion-tracking-ml-original-colab.ipynb
